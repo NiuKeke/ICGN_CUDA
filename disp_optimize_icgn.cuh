@@ -1,8 +1,7 @@
 #ifndef DISP_OPT_DISP_OPTIMIZE_ICGN_CUH
 #define DISP_OPT_DISP_OPTIMIZE_ICGN_CUH
 #include <opencv2/opencv.hpp>
-
-class __declspec(dllexport) CDispOptimizeICGN_GPU {
+class CDispOptimizeICGN_GPU {
 public:
     CDispOptimizeICGN_GPU(){};
     ~CDispOptimizeICGN_GPU(){};

@@ -6,7 +6,7 @@
 #define DISP_OPT_DISP_OPTIMIZE_ICGN_CPU_H
 #include <opencv2/opencv.hpp>
 
-class __declspec(dllexport) CDispOptimizeICGN_CPU {
+class  CDispOptimizeICGN_CPU {
 public:
     CDispOptimizeICGN_CPU(){};
     ~CDispOptimizeICGN_CPU(){};
