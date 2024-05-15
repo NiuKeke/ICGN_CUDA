@@ -23,7 +23,7 @@ int main(int argc, char **argv){
     int sideW = 5;
     int maxIter = 15;
     cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_64FC1);
-    CDispOptimizeICGN_CPU disp_optimize;
+    CDispOptimizeICGN_GPU disp_optimize;
     disp_optimize.run(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
 
     cv::imwrite("./result.png", optDisp);
