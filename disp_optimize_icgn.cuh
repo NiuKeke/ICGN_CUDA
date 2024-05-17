@@ -14,7 +14,7 @@ private:
     void generate_gradient_image(cv::Mat &_l_image, float *&_x_gradient_image, float *&_y_gradient_image);
     //
     void generate_hessian_mat(int subset, int sideW, int maxIter,int width, int height,float *_x_gradient_image, 
-        float *_y_gradient_image, float *_hessian_mat);
+        float *_y_gradient_image, double *&_hessian_mat);
 
 };
 
