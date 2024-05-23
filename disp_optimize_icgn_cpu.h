@@ -43,6 +43,11 @@ private:
     int CalOptDisp(cv::Mat &ImRef, cv::Mat &ImDef, cv::Mat &gradxImgRef, cv::Mat &gradyImgRef,
                    cv::Mat &localSubHom, cv::Mat &localSub, float p[], int pCoord[], double* dispBias, int maxIter,
                    int subset, int halfSubset, int sideW, int length);
+
+    //
+    int calHessian(int row, int col, unsigned char *ImRef, unsigned char *ImDef, float *gradxImgRef, float *gradyImgRef,
+                                     int *localSubHom, float *localSub, float p[], int pCoord[], double *dispBias, int maxIter,
+                                     int subset, int halfSubset, int sideW, int length, double (*H)[6], bool bDebug);
 };
 
 

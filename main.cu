@@ -25,6 +25,8 @@ int main(int argc, char **argv){
     cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_64FC1);
     CDispOptimizeICGN_GPU disp_optimize;
     disp_optimize.run(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
+    // CDispOptimizeICGN_CPU disp_optimize_cpu;
+    // disp_optimize_cpu.run_old(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
 
     cv::imwrite("./result.png", optDisp);
 
