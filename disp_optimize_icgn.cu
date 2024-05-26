@@ -11,6 +11,7 @@
 #define BLOCK_THREAD_DIM_Y 8
 #define NUM_PER_THREAD_X 4
 #define NUM_PER_THREAD_Y 4
+#define WARP_SIZE 32
 __global__ void generate_gradient_image_kernel(int width, int height, uchar *_src_image,
                                                float *_x_gradient_image, float *_y_gradient_image)
 {
@@ -63,10 +64,7 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
-    // if (blockIdx.y == 0 && blockIdx.x == 38)
-    // {
-    //     //printf("blockIdx.x: %d, blockIdx.y: %d, g_x: %d, g_y: %d\n", blockIdx.x, blockIdx.y, g_x, g_y);
-    // }
+
     __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     for (int i = 0; i < NUM_PER_THREAD_Y; i++)
@@ -79,39 +77,10 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
             _y_grad_image_sm[(threadIdx.y + i * BLOCK_THREAD_DIM_Y) * blockDim.x * NUM_PER_THREAD_X + threadIdx.x + j * BLOCK_THREAD_DIM_X] =
                 _y_grad_image[(g_y + i * BLOCK_THREAD_DIM_Y) * width + g_x + j * BLOCK_THREAD_DIM_X];
 
-            // if (blockIdx.y == 0 && blockIdx.x == 38)
-            // {
-            //     int index_region = (threadIdx.y + i * BLOCK_THREAD_DIM_Y) * blockDim.x * NUM_PER_THREAD_X + threadIdx.x + j * BLOCK_THREAD_DIM_X;
-            //     int row_region = index_region / 32;
-            //     int col_region = index_region % 32;
-            //     // if (row_region == 18)
-            //     // {
-            //     //     printf("threadIdx.x: %d, threadIdx.y: %d, row: %d, col: %d, blockIdx.x: %d, blockIdx.y: %d, g_x: %d, g_y: %d,row_region: %d, col_region: %d, _x_grad_image_sm[%d]:%lf, _x_grad_image[%d]: %lf\n",
-            //     //            threadIdx.x, threadIdx.y, i, j, blockIdx.x, blockIdx.y, g_x, g_y, row_region, col_region,
-            //     //            (threadIdx.y + i * BLOCK_THREAD_DIM_Y) * blockDim.x * NUM_PER_THREAD_X + threadIdx.x + j * BLOCK_THREAD_DIM_X,
-            //     //            _x_grad_image_sm[(threadIdx.y + i * BLOCK_THREAD_DIM_Y) * blockDim.x * NUM_PER_THREAD_X + threadIdx.x + j * BLOCK_THREAD_DIM_X],
-            //     //            (g_y + i * BLOCK_THREAD_DIM_Y) * width + g_x + j * BLOCK_THREAD_DIM_X,
-            //     //            _x_grad_image[(g_y + i * BLOCK_THREAD_DIM_Y) * width + g_x + j * BLOCK_THREAD_DIM_X]);
-            //     // }
-            // }
         }
     }
     __syncthreads();
-    // for (int j = -halfSubset; j <= halfSubset; j++) // y
-    // {
-    //     for (int k = -halfSubset; k <= halfSubset; k++) // x
-    //     {
-    //         if (blockIdx.y == 0 && blockIdx.x == 40)
-    //         {
-    //             printf("threadIdx.x: %d, threadIdx.y: %d, row: %d, col: %d, blockIdx.x: %d, blockIdx.y: %d, g_x: %d, g_y: %d,_x_grad_image_sm[%d]:%lf, _y_grad_image_sm[%d]: %lf\n",
-    //                    threadIdx.x, threadIdx.y, j, k, blockIdx.x, blockIdx.y, g_x, g_y,
-    //                    halfWinSize * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + threadIdx.y * BLOCK_THREAD_DIM_X + j + halfWinSize + k + threadIdx.x,
-    //                    _x_grad_image_sm[halfWinSize * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + threadIdx.y * BLOCK_THREAD_DIM_X + j + halfWinSize + k + threadIdx.x],
-    //                    halfWinSize * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + threadIdx.y * BLOCK_THREAD_DIM_X + j + halfWinSize + k + threadIdx.x,
-    //                    _y_grad_image_sm[halfWinSize * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + threadIdx.y * BLOCK_THREAD_DIM_X + j + halfWinSize + k + threadIdx.x]);
-    //         }
-    //     }
-    // }
+
 
     double hessian[6 * 6] = {0};
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
@@ -121,31 +90,13 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
             for (int k = -halfSubset; k <= halfSubset; k++) // x
             {
                 double Jacobian[6];
-                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
-                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
-                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
-                Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
-                Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
+                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + j) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + k + threadIdx.x];
+                Jacobian[1] = Jacobian[0] * double(j) / double(halfSubset + 1);//x;
+                Jacobian[2] = Jacobian[0] * double(k) / double(halfSubset + 1);//y;
+                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + j) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + k + threadIdx.x];
+                Jacobian[4] = Jacobian[3] * double(j) / double(halfSubset + 1);
+                Jacobian[5] = Jacobian[3] * double(k) / double(halfSubset + 1);
 
-                // if (blockIdx.y == 0 && blockIdx.x == 38)
-                // {
-                //     int index_region = (halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x;
-                //     int row_region = index_region / 32;
-                //     int col_region = index_region % 32;
-                //     if (row_region == 18 && threadIdx.x == 5 && threadIdx.y == 1)
-                //     {
-                //         // printf("111 threadIdx.x: %d, threadIdx.y: %d, row: %d, col: %d, blockIdx.x: %d, blockIdx.y: %d, g_x: %d, g_y: %d,row_region: %d, col_region: %d, _x_grad_image_sm[%d]:%lf, _y_grad_image_sm[%d]: %lf\n",
-                //         //        threadIdx.x, threadIdx.y, k, j, blockIdx.x, blockIdx.y, g_x, g_y, row_region, col_region,
-                //         //        index_region,
-                //         //        _x_grad_image_sm[index_region],
-                //         //        index_region,
-                //         //        _y_grad_image_sm[index_region]);
-                //         // printf("Jacobian[0]: %lf, Jacobian[1]: %lf,Jacobian[2]: %lf,Jacobian[3]: %lf,Jacobian[4]: %lf,Jacobian[5]: %lf, localSub_x:%lf,localSub_y: %lf\n",
-                //         //  Jacobian[0], Jacobian[1], Jacobian[2],
-                //         //  Jacobian[3], Jacobian[4], Jacobian[5], float(k) / float(halfSubset + 1), float(j) / float(halfSubset + 1));
-                //     }
-                // }
 
                 hessian[0] += Jacobian[0] * Jacobian[0];
                 hessian[1] += Jacobian[0] * Jacobian[1];
@@ -192,17 +143,367 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
     for (int i = 0; i < 6 * 6; i++)
     {
         _hessian_mat[(g_y + halfWinSize) * width + g_x + halfWinSize + i * width * height] = hessian[i];
-
-        // if (blockIdx.y == 0 && blockIdx.x == 38 && threadIdx.x == 5 && threadIdx.y == 1)
-        // {
-        //     int hessian_index = (g_y + halfWinSize) * width + g_x + halfWinSize + i * width * height;
-        //     printf("blockIdx.x: %d, blockIdx.y: %d, g_x: %d, g_y: %d, hessian_index: %d,hessian[%d]: %lf\n", blockIdx.x, blockIdx.y, g_x, g_y,
-        //            hessian_index,i, hessian[i]);
-        // }
+        //_hessian_mat[i] = hessian[i];
     }
+}
+
+__global__ void calHessianMat_kernel_opt(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image,
+                                     double *_hessian_mat)
+{
+
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % BLOCK_DATA_DIM_X;
+    int thread_y = thread_index / BLOCK_DATA_DIM_X;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
+    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+
+
+    __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+    __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+
+    for (int i = 0; i < WARP_SIZE / 2; ++i){
+        _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+
+    }
+
+
+    __syncthreads();
+
+
+    double hessian[6 * 6] = {0};
+    // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
+    {
+        for (int j = -halfSubset; j <= halfSubset; j++) // y
+        {
+            for (int k = -halfSubset; k <= halfSubset; k++) // x
+            {
+                double Jacobian[6];
+                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
+                Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
+                Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
+
+
+                hessian[0] += Jacobian[0] * Jacobian[0];
+                hessian[1] += Jacobian[0] * Jacobian[1];
+                hessian[2] += Jacobian[0] * Jacobian[2];
+                hessian[3] += Jacobian[0] * Jacobian[3];
+                hessian[4] += Jacobian[0] * Jacobian[4];
+                hessian[5] += Jacobian[0] * Jacobian[5];
+                hessian[6] += Jacobian[1] * Jacobian[0];
+                hessian[7] += Jacobian[1] * Jacobian[1];
+                hessian[8] += Jacobian[1] * Jacobian[2];
+                hessian[9] += Jacobian[1] * Jacobian[3];
+                hessian[10] += Jacobian[1] * Jacobian[4];
+                hessian[11] += Jacobian[1] * Jacobian[5];
+                hessian[12] += Jacobian[2] * Jacobian[0];
+                hessian[13] += Jacobian[2] * Jacobian[1];
+                hessian[14] += Jacobian[2] * Jacobian[2];
+                hessian[15] += Jacobian[2] * Jacobian[3];
+                hessian[16] += Jacobian[2] * Jacobian[4];
+                hessian[17] += Jacobian[2] * Jacobian[5];
+                hessian[18] += Jacobian[3] * Jacobian[0];
+                hessian[19] += Jacobian[3] * Jacobian[1];
+                hessian[20] += Jacobian[3] * Jacobian[2];
+                hessian[21] += Jacobian[3] * Jacobian[3];
+                hessian[22] += Jacobian[3] * Jacobian[4];
+                hessian[23] += Jacobian[3] * Jacobian[5];
+                hessian[24] += Jacobian[4] * Jacobian[0];
+                hessian[25] += Jacobian[4] * Jacobian[1];
+                hessian[26] += Jacobian[4] * Jacobian[2];
+                hessian[27] += Jacobian[4] * Jacobian[3];
+                hessian[28] += Jacobian[4] * Jacobian[4];
+                hessian[29] += Jacobian[4] * Jacobian[5];
+                hessian[30] += Jacobian[5] * Jacobian[0];
+                hessian[31] += Jacobian[5] * Jacobian[1];
+                hessian[32] += Jacobian[5] * Jacobian[2];
+                hessian[33] += Jacobian[5] * Jacobian[3];
+                hessian[34] += Jacobian[5] * Jacobian[4];
+                hessian[35] += Jacobian[5] * Jacobian[5];
+            }
+        }
+    }
+
+    __syncthreads();
+
+    for (int i = 0; i < 6 * 6; i++)
+    {
+        _hessian_mat[(g_y + halfWinSize + threadIdx.y) * width + g_x + threadIdx.x + halfWinSize + i * width * height] = hessian[i];
+        //_hessian_mat[i] = hessian[i];
+    }
+}
+
+__global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image,
+                                         double *_hessian_mat)
+{
+
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % BLOCK_DATA_DIM_X;
+    int thread_y = thread_index / BLOCK_DATA_DIM_X;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
+    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+
+
+    __shared__ float mem_sm[BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y * 6 * 6];
+    float *_x_grad_image_sm = &mem_sm[0];
+    float *_y_grad_image_sm = &mem_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y];
+    float *_hessian_mat_sm = &mem_sm[0];
+    for (int i = 0; i < WARP_SIZE / 2; ++i){
+        _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+    }
+
+
+    __syncthreads();
+
+
+    double hessian[6 * 6] = {0};
+    // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
+    {
+        for (int j = -halfSubset; j <= halfSubset; j++) // y
+        {
+            for (int k = -halfSubset; k <= halfSubset; k++) // x
+            {
+                double Jacobian[6];
+                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
+                Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
+                Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
+
+
+                hessian[0] += Jacobian[0] * Jacobian[0];
+                hessian[1] += Jacobian[0] * Jacobian[1];
+                hessian[2] += Jacobian[0] * Jacobian[2];
+                hessian[3] += Jacobian[0] * Jacobian[3];
+                hessian[4] += Jacobian[0] * Jacobian[4];
+                hessian[5] += Jacobian[0] * Jacobian[5];
+                hessian[6] += Jacobian[1] * Jacobian[0];
+                hessian[7] += Jacobian[1] * Jacobian[1];
+                hessian[8] += Jacobian[1] * Jacobian[2];
+                hessian[9] += Jacobian[1] * Jacobian[3];
+                hessian[10] += Jacobian[1] * Jacobian[4];
+                hessian[11] += Jacobian[1] * Jacobian[5];
+                hessian[12] += Jacobian[2] * Jacobian[0];
+                hessian[13] += Jacobian[2] * Jacobian[1];
+                hessian[14] += Jacobian[2] * Jacobian[2];
+                hessian[15] += Jacobian[2] * Jacobian[3];
+                hessian[16] += Jacobian[2] * Jacobian[4];
+                hessian[17] += Jacobian[2] * Jacobian[5];
+                hessian[18] += Jacobian[3] * Jacobian[0];
+                hessian[19] += Jacobian[3] * Jacobian[1];
+                hessian[20] += Jacobian[3] * Jacobian[2];
+                hessian[21] += Jacobian[3] * Jacobian[3];
+                hessian[22] += Jacobian[3] * Jacobian[4];
+                hessian[23] += Jacobian[3] * Jacobian[5];
+                hessian[24] += Jacobian[4] * Jacobian[0];
+                hessian[25] += Jacobian[4] * Jacobian[1];
+                hessian[26] += Jacobian[4] * Jacobian[2];
+                hessian[27] += Jacobian[4] * Jacobian[3];
+                hessian[28] += Jacobian[4] * Jacobian[4];
+                hessian[29] += Jacobian[4] * Jacobian[5];
+                hessian[30] += Jacobian[5] * Jacobian[0];
+                hessian[31] += Jacobian[5] * Jacobian[1];
+                hessian[32] += Jacobian[5] * Jacobian[2];
+                hessian[33] += Jacobian[5] * Jacobian[3];
+                hessian[34] += Jacobian[5] * Jacobian[4];
+                hessian[35] += Jacobian[5] * Jacobian[5];
+            }
+        }
+    }
+
+    __syncthreads();
+
+
+}
+
+__device__ double getA(double *hessian, int n){
+    if (n == 1)
+    {
+        return hessian[0];
+    }
+    double ans = 0;
+    double temp[6 * 6] = {0.0};
+    int i, j, k;
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < n - 1; j++)
+        {
+            for (k = 0; k < n - 1; k++)
+            {
+                temp[j * 6 + k] = hessian[(j + 1) * 6 + ((k >= i) ? k + 1 : k)];
+            }
+        }
+        double t = getA(temp, n - 1);
+        if (i % 2 == 0)
+        {
+            ans += hessian[i] * t;
+        }
+        else
+        {
+            ans -= hessian[i] * t;
+        }
+    }
+    return ans;
+}
+
+__device__ void getAStart(double *hessian, int n, double (*ans)[6])
+{
+    if (n == 1)
+    {
+        ans[0][0] = 1;
+    }
+    int i, j, k, t;
+    double temp[6*6];
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < n; j++)
+        {
+            for (k = 0; k < n - 1; k++)
+            {
+                for (t = 0; t < n - 1; t++)
+                {
+                    temp[k* 6 + t] = hessian[(k >= i ? k + 1 : k) * 6 + (t >= j ? t + 1 : t)];
+                }
+            }
+
+            ans[j][i] = getA(temp, n - 1);
+            if ((i + j) % 2 == 1)
+            {
+                ans[j][i] = -ans[j][i];
+            }
+        }
+    }
+}
+
+__device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
+{
+    double flag = getA(hessian, n);
+    double t[6][6];
+    if (flag == 0)
+    {
+        return ;
+    }
+    else
+    {
+        getAStart(hessian, n, t);
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                des[i][j] = t[i][j] / flag;
+            }
+        }
+    }
+}
+__global__ void calNewDisp(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image, float *_origin_disp,
+                           float *_opt_disp){
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % BLOCK_DATA_DIM_X;
+    int thread_y = thread_index / BLOCK_DATA_DIM_X;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
+    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+
+
+    __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+    __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+
+    for (int i = 0; i < WARP_SIZE / 2; ++i){
+        _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+
+    }
+
+
+    __syncthreads();
+
+
+    double hessian[6 * 6] = {0};
+    // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
+    {
+        for (int j = -halfSubset; j <= halfSubset; j++) // y
+        {
+            for (int k = -halfSubset; k <= halfSubset; k++) // x
+            {
+                double Jacobian[6];
+                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
+                Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
+                Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
+
+
+                hessian[0] += Jacobian[0] * Jacobian[0];
+                hessian[1] += Jacobian[0] * Jacobian[1];
+                hessian[2] += Jacobian[0] * Jacobian[2];
+                hessian[3] += Jacobian[0] * Jacobian[3];
+                hessian[4] += Jacobian[0] * Jacobian[4];
+                hessian[5] += Jacobian[0] * Jacobian[5];
+                hessian[6] += Jacobian[1] * Jacobian[0];
+                hessian[7] += Jacobian[1] * Jacobian[1];
+                hessian[8] += Jacobian[1] * Jacobian[2];
+                hessian[9] += Jacobian[1] * Jacobian[3];
+                hessian[10] += Jacobian[1] * Jacobian[4];
+                hessian[11] += Jacobian[1] * Jacobian[5];
+                hessian[12] += Jacobian[2] * Jacobian[0];
+                hessian[13] += Jacobian[2] * Jacobian[1];
+                hessian[14] += Jacobian[2] * Jacobian[2];
+                hessian[15] += Jacobian[2] * Jacobian[3];
+                hessian[16] += Jacobian[2] * Jacobian[4];
+                hessian[17] += Jacobian[2] * Jacobian[5];
+                hessian[18] += Jacobian[3] * Jacobian[0];
+                hessian[19] += Jacobian[3] * Jacobian[1];
+                hessian[20] += Jacobian[3] * Jacobian[2];
+                hessian[21] += Jacobian[3] * Jacobian[3];
+                hessian[22] += Jacobian[3] * Jacobian[4];
+                hessian[23] += Jacobian[3] * Jacobian[5];
+                hessian[24] += Jacobian[4] * Jacobian[0];
+                hessian[25] += Jacobian[4] * Jacobian[1];
+                hessian[26] += Jacobian[4] * Jacobian[2];
+                hessian[27] += Jacobian[4] * Jacobian[3];
+                hessian[28] += Jacobian[4] * Jacobian[4];
+                hessian[29] += Jacobian[4] * Jacobian[5];
+                hessian[30] += Jacobian[5] * Jacobian[0];
+                hessian[31] += Jacobian[5] * Jacobian[1];
+                hessian[32] += Jacobian[5] * Jacobian[2];
+                hessian[33] += Jacobian[5] * Jacobian[3];
+                hessian[34] += Jacobian[5] * Jacobian[4];
+                hessian[35] += Jacobian[5] * Jacobian[5];
+            }
+        }
+    }
+
+    __syncthreads();
+    double invH[6][6] = {0};
+    getMatrixInverse(hessian, 6, invH);
+
+
+
+
 }
 void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_src_disp, int subset, int sideW, int maxIter, cv::Mat &_result)
 {
+    printf("111111\n");
     // 生成左图像梯度影像,分为x,y两个方向;
     cv::Mat _x_gradient_image_cpu, _y_gradient_image_cpu;
     _x_gradient_image_cpu.create(_l_image.size(), CV_32FC1);
@@ -220,20 +521,23 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
                cudaMemcpyDeviceToHost);
     cv::imwrite("x_gradient_image_cpu.tif", _x_gradient_image_cpu);
     cv::imwrite("y_gradient_image_cpu.tif", _y_gradient_image_cpu);
-
-    double *hessian = nullptr;
-    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian);
-
-    cv::Mat hessianMat = cv::Mat(36, _l_image.rows * _l_image.cols, CV_64FC1);
-    cudaMemcpy(hessianMat.data, hessian, _l_image.rows * _l_image.cols * sizeof(double) * 36,
-               cudaMemcpyDeviceToHost);
-    for (int n = 0; n < 36; n++)
-    {
-
-        double value = hessianMat.data[n * _l_image.rows * _l_image.cols + 16961];
-        //printf("n: %d, value: %lf\n", n, value);
-    }
-    cv::imwrite("./hessian.tif", hessianMat);
+    printf("2222222\n");
+//    double *hessian = nullptr;
+//    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian);
+//
+//    cv::Mat hessianMat = cv::Mat(36, _l_image.rows * _l_image.cols, CV_64FC1);
+//    cudaMemcpy(hessianMat.data, hessian, _l_image.rows * _l_image.cols * sizeof(double) * 36,
+//               cudaMemcpyDeviceToHost);
+//    for (int n = 0; n < 36; n++)
+//    {
+//
+//        double value = hessianMat.data[n * _l_image.rows * _l_image.cols + 16961];
+//        //printf("n: %d, value: %lf\n", n, value);
+//    }
+//    cv::imwrite("./hessian.tif", hessianMat);
+    printf("000\n");
+    calOptDisp(subset, sideW, maxIter,_l_image.cols, _r_image.rows, _x_gradient_image,
+               _y_gradient_image, (float*)_src_disp.data,  (float*)_result.data);
 }
 
 void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxIter, int width, int height, float *_x_gradient_image,
@@ -255,7 +559,7 @@ void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxI
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
-    calHessianMat_kernel<<<blocks, threads>>>(subset, sideW, width, height, _x_gradient_image, _y_gradient_image, _hessian_mat);
+    calHessianMat_kernel_opt<<<blocks, threads>>>(subset, sideW, width, height, _x_gradient_image, _y_gradient_image, _hessian_mat);
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
@@ -330,4 +634,39 @@ void CDispOptimizeICGN_GPU::generate_gradient_image(cv::Mat &_l_image, cv::Mat &
     cudaEventDestroy(stop);
 
     return;
+}
+
+void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter,int width, int height,float *_x_gradient_image,
+                float *_y_gradient_image, float *_origin_disp_image, float *_opt_disp_image){
+
+    printf("111\n");
+    float *_origin_disp_image_gpu = nullptr;
+    float *_opt_disp_image_gpu = nullptr;
+    cudaMalloc((void **)&_origin_disp_image_gpu, width * height * sizeof(float));
+    cudaMalloc((void **)&_opt_disp_image_gpu, width * height * sizeof(float));
+    cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(float),
+               cudaMemcpyHostToDevice);
+    printf("222\n");
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+
+    dim3 threads(8, 8);
+    dim3 blocks((width - 2 * halfWinSize + threads.x - 1) / (threads.x),
+                (height - 2 * halfWinSize + threads.y - 1) / (threads.y));
+
+    printf("width: %d, height: %d, blocks.x: %d, blocks.y: %d, threads.x: %d, threads.y: %d\n",
+           width, height, blocks.x, blocks.y, threads.x, threads.y);
+    cudaEvent_t start, stop;
+    float time = 0.0f;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+    calNewDisp<<<blocks, threads>>>(subset, sideW, width, height,
+                                    _x_gradient_image, _y_gradient_image,
+                                    _origin_disp_image_gpu, _opt_disp_image_gpu);
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaDeviceSynchronize();
+    printf("calOptDisp time: %f ms\n", time);
 }

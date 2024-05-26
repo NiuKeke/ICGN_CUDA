@@ -251,8 +251,8 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
                 int col = n % 6;
                 int row = n / 6;
                 *hessianMat.ptr<double>(n, i) = H[row][col];
-                if (i == 16961)
-                     printf("i: %d,irow: %d, icol: %d,  H[%d][%d]: %lf,disp[%d]: %d\n", i, irow, icol, row, col, H[row][col], i, disp[i]);
+//                if (i == 16961)
+//                     printf("i: %d,irow: %d, icol: %d,  H[%d][%d]: %lf,disp[%d]: %d\n", i, irow, icol, row, col, H[row][col], i, disp[i]);
             }
 
             dispFloat[i] = disp[i] + dispBias[1];
@@ -367,6 +367,8 @@ int CDispOptimizeICGN_CPU::calHessian(int row, int col, unsigned char *ImRef, un
         if(row == 13 && col == 321)
             printf("hessian[%d][%d]: %lf\n", irow, icol, H[irow][icol]);
     }
+
+    return 0;
 }
 int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef, float *gradxImgRef, float *gradyImgRef,
                                      int *localSubHom, float *localSub, float p[], int pCoord[], double *dispBias, int maxIter,
