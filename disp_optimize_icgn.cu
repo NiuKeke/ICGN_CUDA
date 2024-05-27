@@ -12,6 +12,8 @@
 #define NUM_PER_THREAD_X 4
 #define NUM_PER_THREAD_Y 4
 #define WARP_SIZE 32
+#define SUBSET_SIZE 15
+#define SUBREGION_NUM (SUBSET_SIZE*SUBSET_SIZE)
 __global__ void generate_gradient_image_kernel(int width, int height, uchar *_src_image,
                                                float *_x_gradient_image, float *_y_gradient_image)
 {
@@ -64,7 +66,6 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
-
     __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     for (int i = 0; i < NUM_PER_THREAD_Y; i++)
@@ -76,11 +77,9 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
 
             _y_grad_image_sm[(threadIdx.y + i * BLOCK_THREAD_DIM_Y) * blockDim.x * NUM_PER_THREAD_X + threadIdx.x + j * BLOCK_THREAD_DIM_X] =
                 _y_grad_image[(g_y + i * BLOCK_THREAD_DIM_Y) * width + g_x + j * BLOCK_THREAD_DIM_X];
-
         }
     }
     __syncthreads();
-
 
     double hessian[6 * 6] = {0};
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
@@ -91,12 +90,11 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
             {
                 double Jacobian[6];
                 Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + j) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + k + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(j) / double(halfSubset + 1);//x;
-                Jacobian[2] = Jacobian[0] * double(k) / double(halfSubset + 1);//y;
+                Jacobian[1] = Jacobian[0] * double(j) / double(halfSubset + 1); // x;
+                Jacobian[2] = Jacobian[0] * double(k) / double(halfSubset + 1); // y;
                 Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + j) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + k + threadIdx.x];
                 Jacobian[4] = Jacobian[3] * double(j) / double(halfSubset + 1);
                 Jacobian[5] = Jacobian[3] * double(k) / double(halfSubset + 1);
-
 
                 hessian[0] += Jacobian[0] * Jacobian[0];
                 hessian[1] += Jacobian[0] * Jacobian[1];
@@ -148,7 +146,7 @@ __global__ void calHessianMat_kernel(int subset, int sideW, int width, int heigh
 }
 
 __global__ void calHessianMat_kernel_opt(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image,
-                                     double *_hessian_mat)
+                                         double *_hessian_mat)
 {
 
     int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
@@ -162,19 +160,16 @@ __global__ void calHessianMat_kernel_opt(int subset, int sideW, int width, int h
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
-
     __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
 
-    for (int i = 0; i < WARP_SIZE / 2; ++i){
+    for (int i = 0; i < WARP_SIZE / 2; ++i)
+    {
         _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
         _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
-
     }
 
-
     __syncthreads();
-
 
     double hessian[6 * 6] = {0};
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
@@ -185,12 +180,11 @@ __global__ void calHessianMat_kernel_opt(int subset, int sideW, int width, int h
             {
                 double Jacobian[6];
                 Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
-                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1); // x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1); // y;
                 Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
                 Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
                 Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
-
 
                 hessian[0] += Jacobian[0] * Jacobian[0];
                 hessian[1] += Jacobian[0] * Jacobian[1];
@@ -242,7 +236,7 @@ __global__ void calHessianMat_kernel_opt(int subset, int sideW, int width, int h
 }
 
 __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image,
-                                         double *_hessian_mat)
+                                                    double *_hessian_mat)
 {
 
     int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
@@ -256,19 +250,17 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
-
     __shared__ float mem_sm[BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y * 6 * 6];
     float *_x_grad_image_sm = &mem_sm[0];
     float *_y_grad_image_sm = &mem_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y];
     float *_hessian_mat_sm = &mem_sm[0];
-    for (int i = 0; i < WARP_SIZE / 2; ++i){
+    for (int i = 0; i < WARP_SIZE / 2; ++i)
+    {
         _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
         _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
     }
 
-
     __syncthreads();
-
 
     double hessian[6 * 6] = {0};
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
@@ -279,12 +271,11 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
             {
                 double Jacobian[6];
                 Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
-                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1); // x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1); // y;
                 Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
                 Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
                 Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
-
 
                 hessian[0] += Jacobian[0] * Jacobian[0];
                 hessian[1] += Jacobian[0] * Jacobian[1];
@@ -327,11 +318,10 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
     }
 
     __syncthreads();
-
-
 }
 
-__device__ double getA(double *hessian, int n){
+__device__ double getA(double *hessian, int n)
+{
     if (n == 1)
     {
         return hessian[0];
@@ -368,7 +358,7 @@ __device__ void getAStart(double *hessian, int n, double (*ans)[6])
         ans[0][0] = 1;
     }
     int i, j, k, t;
-    double temp[6*6];
+    double temp[6 * 6];
     for (i = 0; i < n; i++)
     {
         for (j = 0; j < n; j++)
@@ -377,7 +367,7 @@ __device__ void getAStart(double *hessian, int n, double (*ans)[6])
             {
                 for (t = 0; t < n - 1; t++)
                 {
-                    temp[k* 6 + t] = hessian[(k >= i ? k + 1 : k) * 6 + (t >= j ? t + 1 : t)];
+                    temp[k * 6 + t] = hessian[(k >= i ? k + 1 : k) * 6 + (t >= j ? t + 1 : t)];
                 }
             }
 
@@ -396,7 +386,7 @@ __device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
     double t[6][6];
     if (flag == 0)
     {
-        return ;
+        return;
     }
     else
     {
@@ -410,8 +400,223 @@ __device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
         }
     }
 }
-__global__ void calNewDisp(int subset, int sideW, int width, int height, float *_x_grad_image, float *_y_grad_image, float *_origin_disp,
-                           float *_opt_disp){
+
+// 按第一行展开计算|A|
+__device__ double getA3(double *arcs, int n)
+{
+    if (n == 1)
+    {
+        return arcs[0];
+    }
+    double ans = 0;
+    double temp[3*3] = {0.0};
+    int i, j, k;
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < n - 1; j++)
+        {
+            for (k = 0; k < n - 1; k++)
+            {
+                temp[j * 3 + k] = arcs[(j + 1)* 3 + ((k >= i) ? k + 1 : k)];
+            }
+        }
+        double t = getA3(temp, n - 1);
+        if (i % 2 == 0)
+        {
+            ans += arcs[i] * t;
+        }
+        else
+        {
+            ans -= arcs[i] * t;
+        }
+    }
+    return ans;
+}
+
+
+// 计算每一行每一列的每个元素所对应的余子式，组成A*
+__device__ int getAStart3(double *arcs, int n, double ans[3][3])
+{
+    if (n == 1)
+    {
+        ans[0][0] = 1;
+        return 0;
+    }
+    int i, j, k, t;
+    double temp[3*3];
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < n; j++)
+        {
+            for (k = 0; k < n - 1; k++)
+            {
+                for (t = 0; t < n - 1; t++)
+                {
+                    temp[k* 3 + t] = arcs[(k >= i ? k + 1 : k) * 3 + (t >= j ? t + 1 : t)];
+                }
+            }
+
+            ans[j][i] = getA3(temp, n - 1);
+            if ((i + j) % 2 == 1)
+            {
+                ans[j][i] = -ans[j][i];
+            }
+        }
+    }
+    return 1;
+}
+
+
+__device__ void getMatrixInverse3(double *src, int n, double (*des)[3])
+{
+    double flag = getA3(src, n);
+    double t[3][3];
+    if (flag == 0)
+    {
+        return;
+    }
+    else
+    {
+        getAStart3(src, n, t);
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                des[i][j] = t[i][j] / flag;
+            }
+        }
+    }
+    return;
+}
+
+__global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uchar *_origin_src_image,
+                                float *_delta_image, float *_sigma_image)
+{
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % BLOCK_DATA_DIM_X;
+    int thread_y = thread_index / BLOCK_DATA_DIM_X;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
+    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+    __shared__ uchar _src_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+
+    for (int i = 0; i < WARP_SIZE / 2; i++)
+    {
+        _src_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
+            _origin_src_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+    }
+    __syncthreads();
+    float sum = 0.0f;
+    for (int j = -halfSubset; j <= halfSubset; j++) // y
+    {
+        for (int k = -halfSubset; k <= halfSubset; k++) // x
+        {
+            uchar value = _src_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+            sum += value;
+        }
+    }
+    float mean_value = float(sum) / float(subset * subset);
+    __syncthreads();
+}
+
+__device__ void calTargetImageSubRegion(int subset, int sideW, int maxIterNum, uchar *_origin_image_target,
+                                        double (*warP)[3], float *_target_value_intp, float *_sum_target_intp)
+{
+
+    float MBT[4][4] = {{-0.166666666666667, 0.5, -0.5, 0.166666666666667},
+                       {0.5, -1, 0, 0.666666666666667},
+                       {-0.5, 0.5, 0.5, 0.166666666666667},
+                       {0.166666666666667, 0, 0, 0}};
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int n = 0;
+    for (int j = -halfSubset; j <= halfSubset; j++)
+    {
+        for (int k = -halfSubset; k <= halfSubset; k++)
+        {
+            float x = warP[0][0] * k + warP[0][1] * j + warP[0][2] * 1 + halfWinSize;
+            float y = warP[1][0] * k + warP[1][1] * j + warP[1][2] * 1 + halfWinSize;
+            float z = warP[2][0] * k + warP[2][1] * j + warP[2][2] * 1 + halfWinSize;
+            int x_int = floor(x);
+            int y_int = floor(y);
+            int z_int = floor(z);
+            float delta_x = x - x_int;
+            float delta_y = y - y_int;
+            float delta_z = z - z_int;
+            float weight_x[4] = {0};
+            weight_x[0] = MBT[0][0] * x * x * x + MBT[0][1] * x * x + MBT[0][2] * x + MBT[0][3];
+            weight_x[1] = MBT[1][0] * x * x * x + MBT[1][1] * x * x + MBT[1][2] * x + MBT[1][3];
+            weight_x[2] = MBT[2][0] * x * x * x + MBT[2][1] * x * x + MBT[2][2] * x + MBT[2][3];
+            weight_x[3] = MBT[3][0] * x * x * x + MBT[3][1] * x * x + MBT[3][2] * x + MBT[3][3];
+            float weight_y[4] = {0};
+            weight_y[0] = MBT[0][0] * y * y * y + MBT[0][1] * y * y + MBT[0][2] * y + MBT[0][3];
+            weight_y[1] = MBT[1][0] * y * y * y + MBT[1][1] * y * y + MBT[1][2] * y + MBT[1][3];
+            weight_y[2] = MBT[2][0] * y * y * y + MBT[2][1] * y * y + MBT[2][2] * y + MBT[2][3];
+            weight_y[3] = MBT[3][0] * y * y * y + MBT[3][1] * y * y + MBT[3][2] * y + MBT[3][3];
+            float target_value_intp[4][4] = {0};
+            target_value_intp[0][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + threadIdx.x];
+            target_value_intp[1][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + threadIdx.x];
+            target_value_intp[2][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + threadIdx.x];
+            target_value_intp[3][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + threadIdx.x];
+            target_value_intp[0][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 1 + threadIdx.x];
+            target_value_intp[1][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 1 + threadIdx.x];
+            target_value_intp[2][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 1 + threadIdx.x];
+            target_value_intp[3][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 1 + threadIdx.x];
+            target_value_intp[0][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 2 + threadIdx.x];
+            target_value_intp[1][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 2 + threadIdx.x];
+            target_value_intp[2][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 2 + threadIdx.x];
+            target_value_intp[3][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 2 + threadIdx.x];
+            target_value_intp[0][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 3 + threadIdx.x];
+            target_value_intp[1][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 3 + threadIdx.x];
+            target_value_intp[2][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 3 + threadIdx.x];
+            target_value_intp[3][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                    halfWinSize + x_int + 3 + threadIdx.x];
+
+            _target_value_intp[n] += target_value_intp[0][0] * weight_y[0] * weight_x[0];
+            _target_value_intp[n] += target_value_intp[1][0] * weight_y[1] * weight_x[0];
+            _target_value_intp[n] += target_value_intp[2][0] * weight_y[2] * weight_x[0];
+            _target_value_intp[n] += target_value_intp[3][0] * weight_y[3] * weight_x[0];
+            _target_value_intp[n] += target_value_intp[0][1] * weight_y[0] * weight_x[1];
+            _target_value_intp[n] += target_value_intp[1][1] * weight_y[1] * weight_x[1];
+            _target_value_intp[n] += target_value_intp[2][1] * weight_y[2] * weight_x[1];
+            _target_value_intp[n] += target_value_intp[3][1] * weight_y[3] * weight_x[1];
+            _target_value_intp[n] += target_value_intp[0][2] * weight_y[0] * weight_x[2];
+            _target_value_intp[n] += target_value_intp[1][2] * weight_y[1] * weight_x[2];
+            _target_value_intp[n] += target_value_intp[2][2] * weight_y[2] * weight_x[2];
+            _target_value_intp[n] += target_value_intp[3][2] * weight_y[3] * weight_x[2];
+            _target_value_intp[n] += target_value_intp[0][3] * weight_y[0] * weight_x[3];
+            _target_value_intp[n] += target_value_intp[1][3] * weight_y[1] * weight_x[3];
+            _target_value_intp[n] += target_value_intp[2][3] * weight_y[2] * weight_x[3];
+            _target_value_intp[n] += target_value_intp[3][3] * weight_y[3] * weight_x[3];
+            _sum_target_intp[0] += _target_value_intp[n];
+            n++;
+        }
+    }
+}
+__global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int height,
+                           float *_init_p, uchar *_origin_image_ref, uchar *_origin_image_target,
+                           float *_x_grad_image, float *_y_grad_image, float *_origin_disp,
+                           float *_opt_disp)
+{
     int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
     int thread_x = thread_index % BLOCK_DATA_DIM_X;
     int thread_y = thread_index / BLOCK_DATA_DIM_X;
@@ -423,35 +628,51 @@ __global__ void calNewDisp(int subset, int sideW, int width, int height, float *
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
-
     __shared__ float _x_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     __shared__ float _y_grad_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+    __shared__ uchar _src_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y];    // 4k
+    __shared__ uchar _target_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y];
 
-    for (int i = 0; i < WARP_SIZE / 2; ++i){
-        _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
-        _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] = _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
-
+    for (int i = 0; i < WARP_SIZE / 2; ++i)
+    {
+        _x_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
+            _x_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _y_grad_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
+            _y_grad_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _src_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
+            _origin_image_ref[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        _target_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
+            _origin_image_target[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
     }
-
 
     __syncthreads();
 
-
     double hessian[6 * 6] = {0};
+    float sum = 0.0f;
+    float squa_sum = 0.0f;
+    float mean_value = 0.0f;
+    float deltaMean = 0.0f;
+    float ref_image_value[SUBREGION_NUM] = {0};
+    int n = 0;
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
     {
         for (int j = -halfSubset; j <= halfSubset; j++) // y
         {
             for (int k = -halfSubset; k <= halfSubset; k++) // x
             {
+                uchar image_value = _src_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                                                  halfWinSize + j + threadIdx.x];
+                sum += image_value;
+                squa_sum += image_value * image_value;
+                ref_image_value[n] = image_value;
+
                 double Jacobian[6];
                 Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1);//x;
-                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1);//y;
+                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1); // x;
+                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1); // y;
                 Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
                 Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
                 Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
-
 
                 hessian[0] += Jacobian[0] * Jacobian[0];
                 hessian[1] += Jacobian[0] * Jacobian[1];
@@ -489,17 +710,104 @@ __global__ void calNewDisp(int subset, int sideW, int width, int height, float *
                 hessian[33] += Jacobian[5] * Jacobian[3];
                 hessian[34] += Jacobian[5] * Jacobian[4];
                 hessian[35] += Jacobian[5] * Jacobian[5];
+
+                n++;
             }
         }
+    }
+
+    mean_value = float(sum) / float(SUBREGION_NUM);
+    deltaMean = squa_sum - sum * mean_value;
+    float ref_delta_vec[SUBREGION_NUM] = {0};
+    for (int i = 0; i < SUBREGION_NUM; i++)
+    {
+        ref_delta_vec[i] = ref_image_value[i] - mean_value;
     }
 
     __syncthreads();
     double invH[6][6] = {0};
     getMatrixInverse(hessian, 6, invH);
+    
+    double warP[3][3] = {{1 + _init_p[1], _init_p[2], _init_p[0]},
+                         {_init_p[4], 1 + _init_p[5], _init_p[3]},
+                         {0, 0, 1}};
+    float thre = 1;
+    int Iter = 0;
+    float Czncc = 0;
+    while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
+    {
+        float target_value_intp[SUBREGION_NUM] = {0};
+        float target_sum_intp = 0;
+        calTargetImageSubRegion(subset, sideW, maxIterNum, &_target_image_sm[0], warP, &target_value_intp[0], &target_sum_intp);
+        float target_mean_intp = target_sum_intp / SUBREGION_NUM;
+        double target_delta_vec[SUBREGION_NUM] = {0};
+        double target_sum_delta = 0.0f;
+        for (int j = 0; j < subset * subset; j++)
+        {
+            target_delta_vec[j] = target_value_intp[j] - target_mean_intp;
+            target_sum_delta += (target_delta_vec[j] * target_delta_vec[j]);
+        }
+        double target_delta_sqrt = sqrt(target_sum_delta);
+        double deltap[6] = {0};
+        double invHJacob[SUBREGION_NUM * 6] = {0};
+        for (int j = 0; j < subset * subset; j++)
+        {
+            float tmp = ref_delta_vec[j] - deltaMean / target_delta_sqrt * target_delta_vec[j];
+            deltap[0] += -invHJacob[j] * tmp;
+            deltap[1] += -invHJacob[j + SUBREGION_NUM] * tmp;
+            deltap[2] += -invHJacob[j + 2 * SUBREGION_NUM] * tmp;
+            deltap[3] += -invHJacob[j + 3 * SUBREGION_NUM] * tmp;
+            deltap[4] += -invHJacob[j + 4 * SUBREGION_NUM] * tmp;
+            deltap[5] += -invHJacob[j + 5 * SUBREGION_NUM] * tmp;
+        }
+        float M[6] = {1, 1.0f / subset, 1.0f / subset, 1, 1.0f / subset, 1.0f / subset};
+        deltap[0] = M[0] * deltap[0];
+        deltap[1] = M[1] * deltap[1];
+        deltap[2] = M[2] * deltap[2];
+        deltap[3] = M[3] * deltap[3];
+        deltap[4] = M[4] * deltap[4];
+        deltap[5] = M[5] * deltap[5];
 
+        double delta_warp_p[3 * 3] = {1 + deltap[1], deltap[2], deltap[0],
+                                      deltap[4], 1 + deltap[5], deltap[3],
+                                      0, 0, 1};
+        double invwarpdelta[3][3] = {0};
+        getMatrixInverse3(delta_warp_p, 3, invwarpdelta);
 
+        double warP2[3][3] = {0};
+        warP2[0][0] = warP[0][0] * invwarpdelta[0][0] + warP[0][1] * invwarpdelta[1][0] + warP[0][2] * invwarpdelta[2][0];
+        warP2[0][1] = warP[0][0] * invwarpdelta[0][1] + warP[0][1] * invwarpdelta[1][1] + warP[0][2] * invwarpdelta[2][1];
+        warP2[0][2] = warP[0][0] * invwarpdelta[0][2] + warP[0][1] * invwarpdelta[1][2] + warP[0][2] * invwarpdelta[2][2];
+        warP2[1][0] = warP[1][0] * invwarpdelta[0][0] + warP[1][1] * invwarpdelta[1][0] + warP[1][2] * invwarpdelta[2][0];
+        warP2[1][1] = warP[1][0] * invwarpdelta[0][1] + warP[1][1] * invwarpdelta[1][1] + warP[1][2] * invwarpdelta[2][1];
+        warP2[1][2] = warP[1][0] * invwarpdelta[0][2] + warP[1][1] * invwarpdelta[1][2] + warP[1][2] * invwarpdelta[2][2];
+        warP2[2][0] = warP[2][0] * invwarpdelta[0][0] + warP[2][1] * invwarpdelta[1][0] + warP[2][2] * invwarpdelta[2][0];
+        warP2[2][1] = warP[2][0] * invwarpdelta[0][1] + warP[2][1] * invwarpdelta[1][1] + warP[2][2] * invwarpdelta[2][1];
+        warP2[2][2] = warP[2][0] * invwarpdelta[0][2] + warP[2][1] * invwarpdelta[1][2] + warP[2][2] * invwarpdelta[2][2];
 
+        warP[0][0] = warP2[0][0], warP[0][1] = warP2[0][1], warP[0][2] = warP2[0][2];
+        warP[1][0] = warP2[1][0], warP[1][1] = warP2[1][1], warP[1][2] = warP2[1][2];
+        warP[2][0] = warP2[2][0], warP[2][1] = warP2[2][1], warP[2][2] = warP2[2][2];
 
+        thre = sqrt(deltap[0] * deltap[0] + deltap[3] * deltap[3]);
+        Iter++;
+        _init_p[0] = warP[0][2];
+        _init_p[1] = warP[0][0] - 1;
+        _init_p[2] = warP[0][1];
+        _init_p[3] = warP[1][2];
+        _init_p[4] = warP[1][0];
+        _init_p[5] = warP[1][1] - 1;
+        double Cznssd = 0;
+        for (int j = 0; j < subset * subset; j++)
+        {
+            double deltafg = (ref_delta_vec[j] / deltaMean - target_delta_vec[j] / target_delta_sqrt);
+            Cznssd += deltafg * deltafg;
+        }
+        Czncc = 1 - 0.5 * Cznssd;
+    }
+    float delta_disp = _init_p[3];
+    printf("delta_disp: %f\n", delta_disp);
+    _opt_disp[(g_y + halfWinSize + threadIdx.y) * width + g_x + threadIdx.x + halfWinSize] += delta_disp;
 }
 void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_src_disp, int subset, int sideW, int maxIter, cv::Mat &_result)
 {
@@ -522,22 +830,22 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
     cv::imwrite("x_gradient_image_cpu.tif", _x_gradient_image_cpu);
     cv::imwrite("y_gradient_image_cpu.tif", _y_gradient_image_cpu);
     printf("2222222\n");
-//    double *hessian = nullptr;
-//    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian);
-//
-//    cv::Mat hessianMat = cv::Mat(36, _l_image.rows * _l_image.cols, CV_64FC1);
-//    cudaMemcpy(hessianMat.data, hessian, _l_image.rows * _l_image.cols * sizeof(double) * 36,
-//               cudaMemcpyDeviceToHost);
-//    for (int n = 0; n < 36; n++)
-//    {
-//
-//        double value = hessianMat.data[n * _l_image.rows * _l_image.cols + 16961];
-//        //printf("n: %d, value: %lf\n", n, value);
-//    }
-//    cv::imwrite("./hessian.tif", hessianMat);
+    //    double *hessian = nullptr;
+    //    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian);
+    //
+    //    cv::Mat hessianMat = cv::Mat(36, _l_image.rows * _l_image.cols, CV_64FC1);
+    //    cudaMemcpy(hessianMat.data, hessian, _l_image.rows * _l_image.cols * sizeof(double) * 36,
+    //               cudaMemcpyDeviceToHost);
+    //    for (int n = 0; n < 36; n++)
+    //    {
+    //
+    //        double value = hessianMat.data[n * _l_image.rows * _l_image.cols + 16961];
+    //        //printf("n: %d, value: %lf\n", n, value);
+    //    }
+    //    cv::imwrite("./hessian.tif", hessianMat);
     printf("000\n");
-    calOptDisp(subset, sideW, maxIter,_l_image.cols, _r_image.rows, _x_gradient_image,
-               _y_gradient_image, (float*)_src_disp.data,  (float*)_result.data);
+    calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, _x_gradient_image,
+               _y_gradient_image, (float *)_src_disp.data, (float *)_result.data);
 }
 
 void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxIter, int width, int height, float *_x_gradient_image,
@@ -636,17 +944,30 @@ void CDispOptimizeICGN_GPU::generate_gradient_image(cv::Mat &_l_image, cv::Mat &
     return;
 }
 
-void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter,int width, int height,float *_x_gradient_image,
-                float *_y_gradient_image, float *_origin_disp_image, float *_opt_disp_image){
-
-    printf("111\n");
+void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int width, int height,
+                                       uchar *_origin_image_ref, uchar *_origin_image_target, float *_x_gradient_image,
+                                       float *_y_gradient_image, float *_origin_disp_image, float *_opt_disp_image)
+{
     float *_origin_disp_image_gpu = nullptr;
     float *_opt_disp_image_gpu = nullptr;
+    uchar *_origin_image_ref_gpu = nullptr;
+    uchar *_origin_image_target_gpu = nullptr;
+    float p[6] = {0.4686, 0, 0, -0.2116, 0, 0};
+    float *_init_p_gpu = nullptr;
     cudaMalloc((void **)&_origin_disp_image_gpu, width * height * sizeof(float));
     cudaMalloc((void **)&_opt_disp_image_gpu, width * height * sizeof(float));
+    cudaMalloc((void **)&_origin_image_ref_gpu, width * height * sizeof(uchar));
+    cudaMalloc((void **)&_origin_image_target_gpu, width * height * sizeof(uchar));
+    cudaMalloc((void**)&_init_p_gpu, 6 * sizeof(float));
+
     cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(float),
                cudaMemcpyHostToDevice);
-    printf("222\n");
+    cudaMemcpy(_origin_image_ref_gpu, _origin_image_ref, width * height * sizeof(uchar),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(_origin_image_target_gpu, _origin_image_target, width * height * sizeof(uchar),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(_init_p_gpu, &p[0], 6 * sizeof(float), cudaMemcpyHostToDevice);
+
     int halfSubset = subset / 2;
     int halfWinSize = halfSubset + sideW; // 7+5;
 
@@ -661,7 +982,7 @@ void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter,int wi
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
-    calNewDisp<<<blocks, threads>>>(subset, sideW, width, height,
+    calNewDisp<<<blocks, threads>>>(subset, sideW, maxIter, width, height, _init_p_gpu, _origin_image_ref_gpu, _origin_image_target_gpu,
                                     _x_gradient_image, _y_gradient_image,
                                     _origin_disp_image_gpu, _opt_disp_image_gpu);
     cudaEventRecord(stop, 0);
@@ -669,4 +990,7 @@ void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter,int wi
     cudaEventElapsedTime(&time, start, stop);
     cudaDeviceSynchronize();
     printf("calOptDisp time: %f ms\n", time);
+
+    cudaMemcpy(_opt_disp_image, _opt_disp_image_gpu, width * height * sizeof(float),
+               cudaMemcpyDeviceToHost);
 }

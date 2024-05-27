@@ -461,8 +461,8 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
     double sumRef2 = 0;
     for (int j = 0; j < subset * subset; j++)
     {
-        invHJacob[j] = invH[0][0] * Jacobian[j] + invH[0][1] * Jacobian[j + subset * subset] + invH[0][2] * Jacobian[j + 2 * subset * subset] + invH[0][3] * Jacobian[j + 3 * subset * subset] + invH[0][4] * Jacobian[j + 4 * subset * subset] + invH[0][5] * Jacobian[j + 5 * subset * subset];
-        invHJacob[j + subset * subset] = invH[1][0] * Jacobian[j] + invH[1][1] * Jacobian[j + subset * subset] + invH[1][2] * Jacobian[j + 2 * subset * subset] + invH[1][3] * Jacobian[j + 3 * subset * subset] + invH[1][4] * Jacobian[j + 4 * subset * subset] + invH[1][5] * Jacobian[j + 5 * subset * subset];
+        invHJacob[j]                       = invH[0][0] * Jacobian[j] + invH[0][1] * Jacobian[j + subset * subset] + invH[0][2] * Jacobian[j + 2 * subset * subset] + invH[0][3] * Jacobian[j + 3 * subset * subset] + invH[0][4] * Jacobian[j + 4 * subset * subset] + invH[0][5] * Jacobian[j + 5 * subset * subset];
+        invHJacob[j + subset * subset]     = invH[1][0] * Jacobian[j] + invH[1][1] * Jacobian[j + subset * subset] + invH[1][2] * Jacobian[j + 2 * subset * subset] + invH[1][3] * Jacobian[j + 3 * subset * subset] + invH[1][4] * Jacobian[j + 4 * subset * subset] + invH[1][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 2 * subset * subset] = invH[2][0] * Jacobian[j] + invH[2][1] * Jacobian[j + subset * subset] + invH[2][2] * Jacobian[j + 2 * subset * subset] + invH[2][3] * Jacobian[j + 3 * subset * subset] + invH[2][4] * Jacobian[j + 4 * subset * subset] + invH[2][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 3 * subset * subset] = invH[3][0] * Jacobian[j] + invH[3][1] * Jacobian[j + subset * subset] + invH[3][2] * Jacobian[j + 2 * subset * subset] + invH[3][3] * Jacobian[j + 3 * subset * subset] + invH[3][4] * Jacobian[j + 4 * subset * subset] + invH[3][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 4 * subset * subset] = invH[4][0] * Jacobian[j] + invH[4][1] * Jacobian[j + subset * subset] + invH[4][2] * Jacobian[j + 2 * subset * subset] + invH[4][3] * Jacobian[j + 3 * subset * subset] + invH[4][4] * Jacobian[j + 4 * subset * subset] + invH[4][5] * Jacobian[j + 5 * subset * subset];
@@ -489,12 +489,12 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
         double maxPcoordInt2 = -subset;
         for (int j = 0; j < subset * subset; j++)
         {
-            gIntep[j] = warP[0][0] * localSubHom[j] + warP[0][1] * localSubHom[j + subset * subset] + warP[0][2] * localSubHom[j + 2 * subset * subset];
-            gIntep[j + subset * subset] = warP[1][0] * localSubHom[j] + warP[1][1] * localSubHom[j + subset * subset] + warP[1][2] * localSubHom[j + 2 * subset * subset];
+            gIntep[j]                       = warP[0][0] * localSubHom[j] + warP[0][1] * localSubHom[j + subset * subset] + warP[0][2] * localSubHom[j + 2 * subset * subset];
+            gIntep[j + subset * subset]     = warP[1][0] * localSubHom[j] + warP[1][1] * localSubHom[j + subset * subset] + warP[1][2] * localSubHom[j + 2 * subset * subset];
             gIntep[j + 2 * subset * subset] = warP[2][0] * localSubHom[j] + warP[2][1] * localSubHom[j + subset * subset] + warP[2][2] * localSubHom[j + 2 * subset * subset];
             // cout << gIntep[j] << "              " << gIntep[j + subset * subset] << "             " << gIntep[j + 2 * subset * subset] << endl;
-            PcoordInt[j] = pCoord[0] + gIntep[j];
-            PcoordInt[j + subset * subset] = pCoord[1] + gIntep[j + subset * subset];
+            PcoordInt[j]                       = pCoord[0] + gIntep[j];
+            PcoordInt[j + subset * subset]     = pCoord[1] + gIntep[j + subset * subset];
             PcoordInt[j + 2 * subset * subset] = pCoord[2] + gIntep[j + 2 * subset * subset] - 1;
             if (PcoordInt[j] < minPcoordInt1)
             {
@@ -536,50 +536,51 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 deltaX[j] = PcoordInt[j] - xInt[j];
                 deltaX[j + subset * subset] = PcoordInt[j + subset * subset] - xInt[j + subset * subset];
                 deltaX[j + 2 * subset * subset] = PcoordInt[j + 2 * subset * subset] - xInt[j + 2 * subset * subset];
-                deltaMatX[j] = MBT[0][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[0][1] * deltaX[j] * deltaX[j] + MBT[0][2] * deltaX[j] + MBT[0][3];
-                deltaMatX[j + subset * subset] = MBT[1][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[1][1] * deltaX[j] * deltaX[j] + MBT[1][2] * deltaX[j] + MBT[1][3];
+
+                deltaMatX[j]                       = MBT[0][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[0][1] * deltaX[j] * deltaX[j] + MBT[0][2] * deltaX[j] + MBT[0][3];
+                deltaMatX[j + subset * subset]     = MBT[1][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[1][1] * deltaX[j] * deltaX[j] + MBT[1][2] * deltaX[j] + MBT[1][3];
                 deltaMatX[j + 2 * subset * subset] = MBT[2][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[2][1] * deltaX[j] * deltaX[j] + MBT[2][2] * deltaX[j] + MBT[2][3];
                 deltaMatX[j + 3 * subset * subset] = MBT[3][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[3][1] * deltaX[j] * deltaX[j] + MBT[3][2] * deltaX[j] + MBT[3][3];
 
                 // cout << "j:          " << j << "          " << deltaMatX[j] << "              " << deltaMatX[j + subset * subset] << "             " << deltaMatX[j + 2 * subset * subset] << "              " << deltaMatX[j + 3 * subset * subset] << "             " << endl;
 
-                deltaMatY[j] = MBT[0][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][2] * deltaX[j + subset * subset] + MBT[0][3];
-                deltaMatY[j + subset * subset] = MBT[1][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][2] * deltaX[j + subset * subset] + MBT[1][3];
+                deltaMatY[j]                       = MBT[0][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][2] * deltaX[j + subset * subset] + MBT[0][3];
+                deltaMatY[j + subset * subset]     = MBT[1][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][2] * deltaX[j + subset * subset] + MBT[1][3];
                 deltaMatY[j + 2 * subset * subset] = MBT[2][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[2][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[2][2] * deltaX[j + subset * subset] + MBT[2][3];
                 deltaMatY[j + 3 * subset * subset] = MBT[3][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[3][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[3][2] * deltaX[j + subset * subset] + MBT[3][3];
                 // cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << endl;
-                Indx[0] = (xInt[j + subset * subset] - 1) * length + xInt[j];
-                Indx[1] = (xInt[j + subset * subset]) * length + xInt[j];
-                Indx[2] = (xInt[j + subset * subset] + 1) * length + xInt[j];
-                Indx[3] = (xInt[j + subset * subset] + 2) * length + xInt[j];
-                Indx[4] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 1;
-                Indx[5] = (xInt[j + subset * subset]) * length + xInt[j] + 1;
-                Indx[6] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 1;
-                Indx[7] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 1;
-                Indx[8] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 2;
-                Indx[9] = (xInt[j + subset * subset]) * length + xInt[j] + 2;
-                Indx[10] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 2;
-                Indx[11] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 2;
-                Indx[12] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 3;
-                Indx[13] = (xInt[j + subset * subset]) * length + xInt[j] + 3;
-                Indx[14] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 3;
-                Indx[15] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 3;
+                Indx[0] = (xInt[j + subset * subset] - 1) * length + xInt[j];//y-1,x
+                Indx[1] = (xInt[j + subset * subset]) * length + xInt[j];//y,x
+                Indx[2] = (xInt[j + subset * subset] + 1) * length + xInt[j];//y+1,x
+                Indx[3] = (xInt[j + subset * subset] + 2) * length + xInt[j];//y+2,x
+                Indx[4] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 1;//y-1,x+1
+                Indx[5] = (xInt[j + subset * subset]) * length + xInt[j] + 1;//y,x+1
+                Indx[6] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 1;//y+1,x+1
+                Indx[7] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 1;//y+2,x+1
+                Indx[8] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 2;//y-1,x+2
+                Indx[9] = (xInt[j + subset * subset]) * length + xInt[j] + 2;//y,x+2
+                Indx[10] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 2;//y+1,x+2
+                Indx[11] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 2;//y+2,x+2
+                Indx[12] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 3;//y-1,x+3
+                Indx[13] = (xInt[j + subset * subset]) * length + xInt[j] + 3;//y,x+3
+                Indx[14] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 3;//y+1,x+3
+                Indx[15] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 3;//y+2,x+3
                 // for (int ic = 0; ic < 16; ic++)
                 //{
                 //	cout << "j:          " << j << "          " << "ic:          " << ic << "          " << Indx[ic] << endl;
                 // }
                 // cout << " ***********************************************************" << endl;
                 // cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << endl;
-                D_all[0] = ImDef[(Indx[0] % length - 1) * length + Indx[0] / length];
-                D_all[1] = ImDef[(Indx[1] % length - 1) * length + Indx[1] / length];
-                D_all[2] = ImDef[(Indx[2] % length - 1) * length + Indx[2] / length];
-                D_all[3] = ImDef[(Indx[3] % length - 1) * length + Indx[3] / length];
-                D_all[4] = ImDef[(Indx[4] % length - 1) * length + Indx[4] / length];
-                D_all[5] = ImDef[(Indx[5] % length - 1) * length + Indx[5] / length];
-                D_all[6] = ImDef[(Indx[6] % length - 1) * length + Indx[6] / length];
-                D_all[7] = ImDef[(Indx[7] % length - 1) * length + Indx[7] / length];
-                D_all[8] = ImDef[(Indx[8] % length - 1) * length + Indx[8] / length];
-                D_all[9] = ImDef[(Indx[9] % length - 1) * length + Indx[9] / length];
+                D_all[0]  = ImDef[(Indx[0] % length - 1) * length + Indx[0] / length];
+                D_all[1]  = ImDef[(Indx[1] % length - 1) * length + Indx[1] / length];
+                D_all[2]  = ImDef[(Indx[2] % length - 1) * length + Indx[2] / length];
+                D_all[3]  = ImDef[(Indx[3] % length - 1) * length + Indx[3] / length];
+                D_all[4]  = ImDef[(Indx[4] % length - 1) * length + Indx[4] / length];
+                D_all[5]  = ImDef[(Indx[5] % length - 1) * length + Indx[5] / length];
+                D_all[6]  = ImDef[(Indx[6] % length - 1) * length + Indx[6] / length];
+                D_all[7]  = ImDef[(Indx[7] % length - 1) * length + Indx[7] / length];
+                D_all[8]  = ImDef[(Indx[8] % length - 1) * length + Indx[8] / length];
+                D_all[9]  = ImDef[(Indx[9] % length - 1) * length + Indx[9] / length];
                 D_all[10] = ImDef[(Indx[10] % length - 1) * length + Indx[10] / length];
                 D_all[11] = ImDef[(Indx[11] % length - 1) * length + Indx[11] / length];
                 D_all[12] = ImDef[(Indx[12] % length - 1) * length + Indx[12] / length];
@@ -587,22 +588,22 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 D_all[14] = ImDef[(Indx[14] % length - 1) * length + Indx[14] / length];
                 D_all[15] = ImDef[(Indx[15] % length - 1) * length + Indx[15] / length];
 
-                defIntp[0] = deltaMatY[j] * D_all[0] * deltaMatX[j];
-                defIntp[1] = deltaMatY[j + subset * subset] * D_all[1] * deltaMatX[j];
-                defIntp[2] = deltaMatY[j + 2 * subset * subset] * D_all[2] * deltaMatX[j];
-                defIntp[3] = deltaMatY[j + 3 * subset * subset] * D_all[3] * deltaMatX[j];
-                defIntp[4] = deltaMatY[j] * D_all[4] * deltaMatX[j + subset * subset];
-                defIntp[5] = deltaMatY[j + subset * subset] * D_all[5] * deltaMatX[j + subset * subset];
-                defIntp[6] = deltaMatY[j + 2 * subset * subset] * D_all[6] * deltaMatX[j + subset * subset];
-                defIntp[7] = deltaMatY[j + 3 * subset * subset] * D_all[7] * deltaMatX[j + subset * subset];
-                defIntp[8] = deltaMatY[j] * D_all[8] * deltaMatX[j + 2 * subset * subset];
-                defIntp[9] = deltaMatY[j + subset * subset] * D_all[9] * deltaMatX[j + 2 * subset * subset];
-                defIntp[10] = deltaMatY[j + 2 * subset * subset] * D_all[10] * deltaMatX[j + 2 * subset * subset];
-                defIntp[11] = deltaMatY[j + 3 * subset * subset] * D_all[11] * deltaMatX[j + 2 * subset * subset];
-                defIntp[12] = deltaMatY[j] * D_all[12] * deltaMatX[j + 3 * subset * subset];
-                defIntp[13] = deltaMatY[j + subset * subset] * D_all[13] * deltaMatX[j + 3 * subset * subset];
-                defIntp[14] = deltaMatY[j + 2 * subset * subset] * D_all[14] * deltaMatX[j + 3 * subset * subset];
-                defIntp[15] = deltaMatY[j + 3 * subset * subset] * D_all[15] * deltaMatX[j + 3 * subset * subset];
+                defIntp[0]  = deltaMatY[j]                        * D_all[0]  * deltaMatX[j];
+                defIntp[1]  = deltaMatY[j + subset * subset]      * D_all[1]  * deltaMatX[j];
+                defIntp[2]  = deltaMatY[j + 2 * subset * subset]  * D_all[2]  * deltaMatX[j];
+                defIntp[3]  = deltaMatY[j + 3 * subset * subset]  * D_all[3]  * deltaMatX[j];
+                defIntp[4]  = deltaMatY[j]                        * D_all[4]  * deltaMatX[j + subset * subset];
+                defIntp[5]  = deltaMatY[j + subset * subset]      * D_all[5]  * deltaMatX[j + subset * subset];
+                defIntp[6]  = deltaMatY[j + 2 * subset * subset]  * D_all[6]  * deltaMatX[j + subset * subset];
+                defIntp[7]  = deltaMatY[j + 3 * subset * subset]  * D_all[7]  * deltaMatX[j + subset * subset];
+                defIntp[8]  = deltaMatY[j]                        * D_all[8]  * deltaMatX[j + 2 * subset * subset];
+                defIntp[9]  = deltaMatY[j + subset * subset]      * D_all[9]  * deltaMatX[j + 2 * subset * subset];
+                defIntp[10] = deltaMatY[j + 2 * subset * subset]  * D_all[10] * deltaMatX[j + 2 * subset * subset];
+                defIntp[11] = deltaMatY[j + 3 * subset * subset]  * D_all[11] * deltaMatX[j + 2 * subset * subset];
+                defIntp[12] = deltaMatY[j]                        * D_all[12] * deltaMatX[j + 3 * subset * subset];
+                defIntp[13] = deltaMatY[j + subset * subset]      * D_all[13] * deltaMatX[j + 3 * subset * subset];
+                defIntp[14] = deltaMatY[j + 2 * subset * subset]  * D_all[14] * deltaMatX[j + 3 * subset * subset];
+                defIntp[15] = deltaMatY[j + 3 * subset * subset]  * D_all[15] * deltaMatX[j + 3 * subset * subset];
                 // for (int ic = 0; ic < 16; ic++)
                 //{
                 //	cout << "j:          " << j << "          " << "ic:          " << ic << "          " << defIntp[ic] << endl;
