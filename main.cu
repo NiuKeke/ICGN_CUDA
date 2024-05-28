@@ -27,7 +27,7 @@ int main(int argc, char **argv){
     int subset = 15;
     int sideW = 5;
     int maxIter = 15;
-    cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
+    cv::Mat optDisp = float_disp.clone();
     CDispOptimizeICGN_GPU disp_optimize;
     disp_optimize.run(l_image, r_image, float_disp, subset, sideW, maxIter, optDisp);
     // CDispOptimizeICGN_CPU disp_optimize_cpu;

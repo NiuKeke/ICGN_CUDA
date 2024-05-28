@@ -322,31 +322,37 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
 
 __device__ double getA(double *hessian, int n)
 {
-    if (n == 1)
-    {
-        return hessian[0];
-    }
     double ans = 0;
-    double temp[6 * 6] = {0.0};
-    int i, j, k;
-    for (i = 0; i < n; i++)
+    int iter_num = 1;
+    while (iter_num <= n)
     {
-        for (j = 0; j < n - 1; j++)
+        if(iter_num == 1){
+            ans = hessian[0];
+            iter_num++;
+            continue;
+        }
+        double temp[6 * 6] = {0.0};
+        int i, j, k;
+        for (i = 0; i < iter_num; i++)
         {
-            for (k = 0; k < n - 1; k++)
+            for (j = 0; j < iter_num - 1; j++)
             {
-                temp[j * 6 + k] = hessian[(j + 1) * 6 + ((k >= i) ? k + 1 : k)];
+                for (k = 0; k < iter_num - 1; k++)
+                {
+                    temp[j * 6 + k] = hessian[(j + 1) * 6 + ((k >= i) ? k + 1 : k)];
+                }
+            }
+            if (i % 2 == 0)
+            {
+                ans += hessian[i] * ans;
+            }
+            else
+            {
+                ans -= hessian[i] * ans;
             }
         }
-        double t = getA(temp, n - 1);
-        if (i % 2 == 0)
-        {
-            ans += hessian[i] * t;
-        }
-        else
-        {
-            ans -= hessian[i] * t;
-        }
+
+        iter_num++;
     }
     return ans;
 }
@@ -404,32 +410,38 @@ __device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
 // 按第一行展开计算|A|
 __device__ double getA3(double *arcs, int n)
 {
-    if (n == 1)
-    {
-        return arcs[0];
-    }
     double ans = 0;
-    double temp[3*3] = {0.0};
-    int i, j, k;
-    for (i = 0; i < n; i++)
+    int iter_num = 1;
+    while (iter_num <= n)
     {
-        for (j = 0; j < n - 1; j++)
+        if(iter_num == 1){
+            ans = arcs[0];
+            iter_num++;
+            continue;
+        }
+        double temp[3 * 3] = {0.0};
+        int i, j, k;
+        for (i = 0; i < iter_num; i++)
         {
-            for (k = 0; k < n - 1; k++)
+            for (j = 0; j < iter_num - 1; j++)
             {
-                temp[j * 3 + k] = arcs[(j + 1)* 3 + ((k >= i) ? k + 1 : k)];
+                for (k = 0; k < iter_num - 1; k++)
+                {
+                    temp[j * 3 + k] = arcs[(j + 1) * 3 + ((k >= i) ? k + 1 : k)];
+                }
+            }
+            if (i % 2 == 0)
+            {
+                ans += arcs[i] * ans;
+            }
+            else
+            {
+                ans -= arcs[i] * ans;
             }
         }
-        double t = getA3(temp, n - 1);
-        if (i % 2 == 0)
-        {
-            ans += arcs[i] * t;
-        }
-        else
-        {
-            ans -= arcs[i] * t;
-        }
+        iter_num++;
     }
+
     return ans;
 }
 
@@ -653,6 +665,7 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
     float mean_value = 0.0f;
     float deltaMean = 0.0f;
     float ref_image_value[SUBREGION_NUM] = {0};
+    double Jacobian[SUBREGION_NUM][6];
     int n = 0;
     // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
     {
@@ -665,68 +678,93 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
                 sum += image_value;
                 squa_sum += image_value * image_value;
                 ref_image_value[n] = image_value;
+                if (blockIdx.x == 40 && blockIdx.y == 40)
+                {
+                    printf("ref_image_value[n]: %lf\n", ref_image_value[n]);
+                }
+                Jacobian[n][0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+                Jacobian[n][1] = Jacobian[n][0] * double(k) / double(halfSubset + 1); // x;
+                Jacobian[n][2] = Jacobian[n][0] * double(j) / double(halfSubset + 1); // y;
+                Jacobian[n][3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
+                Jacobian[n][4] = Jacobian[n][3] * double(k) / double(halfSubset + 1);
+                Jacobian[n][5] = Jacobian[n][3] * double(j) / double(halfSubset + 1);
 
-                double Jacobian[6];
-                Jacobian[0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
-                Jacobian[1] = Jacobian[0] * double(k) / double(halfSubset + 1); // x;
-                Jacobian[2] = Jacobian[0] * double(j) / double(halfSubset + 1); // y;
-                Jacobian[3] = _y_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X + halfWinSize + j + threadIdx.x];
-                Jacobian[4] = Jacobian[3] * double(k) / double(halfSubset + 1);
-                Jacobian[5] = Jacobian[3] * double(j) / double(halfSubset + 1);
-
-                hessian[0] += Jacobian[0] * Jacobian[0];
-                hessian[1] += Jacobian[0] * Jacobian[1];
-                hessian[2] += Jacobian[0] * Jacobian[2];
-                hessian[3] += Jacobian[0] * Jacobian[3];
-                hessian[4] += Jacobian[0] * Jacobian[4];
-                hessian[5] += Jacobian[0] * Jacobian[5];
-                hessian[6] += Jacobian[1] * Jacobian[0];
-                hessian[7] += Jacobian[1] * Jacobian[1];
-                hessian[8] += Jacobian[1] * Jacobian[2];
-                hessian[9] += Jacobian[1] * Jacobian[3];
-                hessian[10] += Jacobian[1] * Jacobian[4];
-                hessian[11] += Jacobian[1] * Jacobian[5];
-                hessian[12] += Jacobian[2] * Jacobian[0];
-                hessian[13] += Jacobian[2] * Jacobian[1];
-                hessian[14] += Jacobian[2] * Jacobian[2];
-                hessian[15] += Jacobian[2] * Jacobian[3];
-                hessian[16] += Jacobian[2] * Jacobian[4];
-                hessian[17] += Jacobian[2] * Jacobian[5];
-                hessian[18] += Jacobian[3] * Jacobian[0];
-                hessian[19] += Jacobian[3] * Jacobian[1];
-                hessian[20] += Jacobian[3] * Jacobian[2];
-                hessian[21] += Jacobian[3] * Jacobian[3];
-                hessian[22] += Jacobian[3] * Jacobian[4];
-                hessian[23] += Jacobian[3] * Jacobian[5];
-                hessian[24] += Jacobian[4] * Jacobian[0];
-                hessian[25] += Jacobian[4] * Jacobian[1];
-                hessian[26] += Jacobian[4] * Jacobian[2];
-                hessian[27] += Jacobian[4] * Jacobian[3];
-                hessian[28] += Jacobian[4] * Jacobian[4];
-                hessian[29] += Jacobian[4] * Jacobian[5];
-                hessian[30] += Jacobian[5] * Jacobian[0];
-                hessian[31] += Jacobian[5] * Jacobian[1];
-                hessian[32] += Jacobian[5] * Jacobian[2];
-                hessian[33] += Jacobian[5] * Jacobian[3];
-                hessian[34] += Jacobian[5] * Jacobian[4];
-                hessian[35] += Jacobian[5] * Jacobian[5];
+                hessian[0]  += Jacobian[n][0] * Jacobian[n][0];
+                hessian[1]  += Jacobian[n][0] * Jacobian[n][1];
+                hessian[2]  += Jacobian[n][0] * Jacobian[n][2];
+                hessian[3]  += Jacobian[n][0] * Jacobian[n][3];
+                hessian[4]  += Jacobian[n][0] * Jacobian[n][4];
+                hessian[5]  += Jacobian[n][0] * Jacobian[n][5];
+                hessian[6]  += Jacobian[n][1] * Jacobian[n][0];
+                hessian[7]  += Jacobian[n][1] * Jacobian[n][1];
+                hessian[8]  += Jacobian[n][1] * Jacobian[n][2];
+                hessian[9]  += Jacobian[n][1] * Jacobian[n][3];
+                hessian[10] += Jacobian[n][1] * Jacobian[n][4];
+                hessian[11] += Jacobian[n][1] * Jacobian[n][5];
+                hessian[12] += Jacobian[n][2] * Jacobian[n][0];
+                hessian[13] += Jacobian[n][2] * Jacobian[n][1];
+                hessian[14] += Jacobian[n][2] * Jacobian[n][2];
+                hessian[15] += Jacobian[n][2] * Jacobian[n][3];
+                hessian[16] += Jacobian[n][2] * Jacobian[n][4];
+                hessian[17] += Jacobian[n][2] * Jacobian[n][5];
+                hessian[18] += Jacobian[n][3] * Jacobian[n][0];
+                hessian[19] += Jacobian[n][3] * Jacobian[n][1];
+                hessian[20] += Jacobian[n][3] * Jacobian[n][2];
+                hessian[21] += Jacobian[n][3] * Jacobian[n][3];
+                hessian[22] += Jacobian[n][3] * Jacobian[n][4];
+                hessian[23] += Jacobian[n][3] * Jacobian[n][5];
+                hessian[24] += Jacobian[n][4] * Jacobian[n][0];
+                hessian[25] += Jacobian[n][4] * Jacobian[n][1];
+                hessian[26] += Jacobian[n][4] * Jacobian[n][2];
+                hessian[27] += Jacobian[n][4] * Jacobian[n][3];
+                hessian[28] += Jacobian[n][4] * Jacobian[n][4];
+                hessian[29] += Jacobian[n][4] * Jacobian[n][5];
+                hessian[30] += Jacobian[n][5] * Jacobian[n][0];
+                hessian[31] += Jacobian[n][5] * Jacobian[n][1];
+                hessian[32] += Jacobian[n][5] * Jacobian[n][2];
+                hessian[33] += Jacobian[n][5] * Jacobian[n][3];
+                hessian[34] += Jacobian[n][5] * Jacobian[n][4];
+                hessian[35] += Jacobian[n][5] * Jacobian[n][5];
 
                 n++;
             }
         }
     }
-
+    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
+    {
+        printf("1111\n");
+    }
+    if (sum == 0.0f)
+    {
+        return;
+    }
     mean_value = float(sum) / float(SUBREGION_NUM);
     deltaMean = squa_sum - sum * mean_value;
     float ref_delta_vec[SUBREGION_NUM] = {0};
     for (int i = 0; i < SUBREGION_NUM; i++)
     {
         ref_delta_vec[i] = ref_image_value[i] - mean_value;
+        if (blockIdx.x == 40 && blockIdx.y == 40 && threadIdx.y == 0 && threadIdx.x == 0)
+        {
+            printf("sum: %lf, mean_value: %lf, ref_delta_vec[i]: %lf, deltaMean: %lf, ref_image_value[i]: %lf\n",
+                   sum, mean_value, ref_delta_vec[i], deltaMean, ref_image_value[i]);
+        }
     }
 
     __syncthreads();
+    
     double invH[6][6] = {0};
     getMatrixInverse(hessian, 6, invH);
+    double invHJacob[SUBREGION_NUM * 6] = {0};
+    for (int j = 0; j < SUBREGION_NUM; j++)
+    {
+        invHJacob[j]                     = invH[0][0] * Jacobian[j][0] + invH[0][1] * Jacobian[j][1] + invH[0][2] * Jacobian[j][2] + invH[0][3] * Jacobian[j][3] + invH[0][4] * Jacobian[j][4] + invH[0][5] * Jacobian[j][5];
+        invHJacob[j + SUBREGION_NUM]     = invH[1][0] * Jacobian[j][0] + invH[1][1] * Jacobian[j][1] + invH[1][2] * Jacobian[j][2] + invH[1][3] * Jacobian[j][3] + invH[1][4] * Jacobian[j][4] + invH[1][5] * Jacobian[j][5];
+        invHJacob[j + 2 * SUBREGION_NUM] = invH[2][0] * Jacobian[j][0] + invH[2][1] * Jacobian[j][1] + invH[2][2] * Jacobian[j][2] + invH[2][3] * Jacobian[j][3] + invH[2][4] * Jacobian[j][4] + invH[2][5] * Jacobian[j][5];
+        invHJacob[j + 3 * SUBREGION_NUM] = invH[3][0] * Jacobian[j][0] + invH[3][1] * Jacobian[j][1] + invH[3][2] * Jacobian[j][2] + invH[3][3] * Jacobian[j][3] + invH[3][4] * Jacobian[j][4] + invH[3][5] * Jacobian[j][5];
+        invHJacob[j + 4 * SUBREGION_NUM] = invH[4][0] * Jacobian[j][0] + invH[4][1] * Jacobian[j][1] + invH[4][2] * Jacobian[j][2] + invH[4][3] * Jacobian[j][3] + invH[4][4] * Jacobian[j][4] + invH[4][5] * Jacobian[j][5];
+        invHJacob[j + 5 * SUBREGION_NUM] = invH[5][0] * Jacobian[j][0] + invH[5][1] * Jacobian[j][1] + invH[5][2] * Jacobian[j][2] + invH[5][3] * Jacobian[j][3] + invH[5][4] * Jacobian[j][4] + invH[5][5] * Jacobian[j][5];
+    }
     
     double warP[3][3] = {{1 + _init_p[1], _init_p[2], _init_p[0]},
                          {_init_p[4], 1 + _init_p[5], _init_p[3]},
@@ -736,23 +774,34 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
     float Czncc = 0;
     while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
     {
+        if(blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0){
+            printf("Iter: %d,thre: %f\n", Iter, thre);
+        }
+        
         float target_value_intp[SUBREGION_NUM] = {0};
         float target_sum_intp = 0;
         calTargetImageSubRegion(subset, sideW, maxIterNum, &_target_image_sm[0], warP, &target_value_intp[0], &target_sum_intp);
         float target_mean_intp = target_sum_intp / SUBREGION_NUM;
         double target_delta_vec[SUBREGION_NUM] = {0};
         double target_sum_delta = 0.0f;
-        for (int j = 0; j < subset * subset; j++)
+        
+        for (int j = 0; j < SUBREGION_NUM; j++)
         {
             target_delta_vec[j] = target_value_intp[j] - target_mean_intp;
             target_sum_delta += (target_delta_vec[j] * target_delta_vec[j]);
         }
+        
         double target_delta_sqrt = sqrt(target_sum_delta);
+        
         double deltap[6] = {0};
-        double invHJacob[SUBREGION_NUM * 6] = {0};
         for (int j = 0; j < subset * subset; j++)
         {
             float tmp = ref_delta_vec[j] - deltaMean / target_delta_sqrt * target_delta_vec[j];
+            if (blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
+            {
+                printf("tmp: %f, ref_delta_vec[j]: %lf, deltaMean: %lf,target_delta_sqrt: %lf, target_delta_vec[j]: %lf\n",
+                        tmp, ref_delta_vec[j], deltaMean,target_delta_sqrt, target_delta_vec[j]);
+            }
             deltap[0] += -invHJacob[j] * tmp;
             deltap[1] += -invHJacob[j + SUBREGION_NUM] * tmp;
             deltap[2] += -invHJacob[j + 2 * SUBREGION_NUM] * tmp;
@@ -767,7 +816,11 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
         deltap[3] = M[3] * deltap[3];
         deltap[4] = M[4] * deltap[4];
         deltap[5] = M[5] * deltap[5];
-
+        //if (blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
+        {
+            printf("deltap[0]: %lf, deltap[1]: %lf, deltap[2]: %lf, deltap[3]: %lf,deltap[4]: %lf, deltap[5]: %lf\n",
+                   deltap[0], deltap[1], deltap[2], deltap[3], deltap[4], deltap[5]);
+        }
         double delta_warp_p[3 * 3] = {1 + deltap[1], deltap[2], deltap[0],
                                       deltap[4], 1 + deltap[5], deltap[3],
                                       0, 0, 1};
@@ -789,8 +842,9 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
         warP[1][0] = warP2[1][0], warP[1][1] = warP2[1][1], warP[1][2] = warP2[1][2];
         warP[2][0] = warP2[2][0], warP[2][1] = warP2[2][1], warP[2][2] = warP2[2][2];
 
-        thre = sqrt(deltap[0] * deltap[0] + deltap[3] * deltap[3]);
-        Iter++;
+        float delta_value = deltap[0] * deltap[0] + deltap[3] * deltap[3];
+        thre = sqrt(delta_value);
+        
         _init_p[0] = warP[0][2];
         _init_p[1] = warP[0][0] - 1;
         _init_p[2] = warP[0][1];
@@ -804,14 +858,14 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
             Cznssd += deltafg * deltafg;
         }
         Czncc = 1 - 0.5 * Cznssd;
+        Iter++;
     }
     float delta_disp = _init_p[3];
-    printf("delta_disp: %f\n", delta_disp);
+    //printf("delta_disp: %f\n", delta_disp);
     _opt_disp[(g_y + halfWinSize + threadIdx.y) * width + g_x + threadIdx.x + halfWinSize] += delta_disp;
 }
 void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_src_disp, int subset, int sideW, int maxIter, cv::Mat &_result)
 {
-    printf("111111\n");
     // 生成左图像梯度影像,分为x,y两个方向;
     cv::Mat _x_gradient_image_cpu, _y_gradient_image_cpu;
     _x_gradient_image_cpu.create(_l_image.size(), CV_32FC1);
@@ -829,23 +883,12 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
                cudaMemcpyDeviceToHost);
     cv::imwrite("x_gradient_image_cpu.tif", _x_gradient_image_cpu);
     cv::imwrite("y_gradient_image_cpu.tif", _y_gradient_image_cpu);
-    printf("2222222\n");
-    //    double *hessian = nullptr;
-    //    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian);
-    //
-    //    cv::Mat hessianMat = cv::Mat(36, _l_image.rows * _l_image.cols, CV_64FC1);
-    //    cudaMemcpy(hessianMat.data, hessian, _l_image.rows * _l_image.cols * sizeof(double) * 36,
-    //               cudaMemcpyDeviceToHost);
-    //    for (int n = 0; n < 36; n++)
-    //    {
-    //
-    //        double value = hessianMat.data[n * _l_image.rows * _l_image.cols + 16961];
-    //        //printf("n: %d, value: %lf\n", n, value);
-    //    }
-    //    cv::imwrite("./hessian.tif", hessianMat);
-    printf("000\n");
+
     calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, _x_gradient_image,
                _y_gradient_image, (float *)_src_disp.data, (float *)_result.data);
+    
+    cudaFree(_x_gradient_image);_x_gradient_image = nullptr;
+    cudaFree(_y_gradient_image);_y_gradient_image = nullptr;
 }
 
 void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxIter, int width, int height, float *_x_gradient_image,
@@ -959,12 +1002,13 @@ void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int w
     cudaMalloc((void **)&_origin_image_ref_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_origin_image_target_gpu, width * height * sizeof(uchar));
     cudaMalloc((void**)&_init_p_gpu, 6 * sizeof(float));
-
     cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(float),
                cudaMemcpyHostToDevice);
     cudaMemcpy(_origin_image_ref_gpu, _origin_image_ref, width * height * sizeof(uchar),
                cudaMemcpyHostToDevice);
     cudaMemcpy(_origin_image_target_gpu, _origin_image_target, width * height * sizeof(uchar),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(_opt_disp_image_gpu, _opt_disp_image, width * height * sizeof(float),
                cudaMemcpyHostToDevice);
     cudaMemcpy(_init_p_gpu, &p[0], 6 * sizeof(float), cudaMemcpyHostToDevice);
 
@@ -993,4 +1037,10 @@ void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int w
 
     cudaMemcpy(_opt_disp_image, _opt_disp_image_gpu, width * height * sizeof(float),
                cudaMemcpyDeviceToHost);
+    
+    cudaFree(_origin_disp_image_gpu);_origin_disp_image_gpu = nullptr;
+    cudaFree(_opt_disp_image_gpu);_opt_disp_image_gpu = nullptr;
+    cudaFree(_origin_image_ref_gpu);_origin_image_ref_gpu = nullptr;
+    cudaFree(_origin_image_target_gpu);_origin_image_target_gpu = nullptr;
+    cudaFree(_init_p_gpu);_init_p_gpu = nullptr;
 }
