@@ -328,8 +328,7 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
         // {
         //     printf("i: %d, blockIdx.y: %d, blockIdx.x: %d, threadIdx.y: %d, threadIdx.x: %d, thread_index: %d, g_index: %d,block_start_index: %d\n", 
         //     i, blockIdx.y, blockIdx.x, threadIdx.y, threadIdx.x,thread_index, g_index, block_start_index);
-        // }
-        
+        //
         _hessian_mat[g_index] = hessian[i];
     }
 
