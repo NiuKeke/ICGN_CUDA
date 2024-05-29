@@ -318,11 +318,26 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
     }
 
     __syncthreads();
+    int block_index = blockIdx.y * gridDim.x + blockIdx.x;
+    
+    for (int i = 0; i < 6 * 6; i++)
+    {
+        int g_index = (halfWinSize) * width + halfWinSize + block_index * BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y + thread_index + i * width * height;
+        // int block_start_index = (halfWinSize) * width + halfWinSize + block_index * BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y;
+        // if(blockIdx.y == 0 && blockIdx.x == 0 && i == 0|| blockIdx.y == 0 && blockIdx.x == 1 && i == 0)
+        // {
+        //     printf("i: %d, blockIdx.y: %d, blockIdx.x: %d, threadIdx.y: %d, threadIdx.x: %d, thread_index: %d, g_index: %d,block_start_index: %d\n", 
+        //     i, blockIdx.y, blockIdx.x, threadIdx.y, threadIdx.x,thread_index, g_index, block_start_index);
+        // }
+        
+        _hessian_mat[g_index] = hessian[i];
+    }
+
 }
 
-__device__ double getA(double *hessian, int n)
+__device__ float getA(float *hessian, int n)
 {
-    double ans = 0;
+    float ans = 0;
     int iter_num = 1;
     while (iter_num <= n)
     {
@@ -331,7 +346,7 @@ __device__ double getA(double *hessian, int n)
             iter_num++;
             continue;
         }
-        double temp[6 * 6] = {0.0};
+        float temp[6 * 6] = {0.0};
         int i, j, k;
         for (i = 0; i < iter_num; i++)
         {
@@ -357,14 +372,14 @@ __device__ double getA(double *hessian, int n)
     return ans;
 }
 
-__device__ void getAStart(double *hessian, int n, double (*ans)[6])
+__device__ void getAStart(float *hessian, int n, float (*ans)[6])
 {
     if (n == 1)
     {
         ans[0][0] = 1;
     }
     int i, j, k, t;
-    double temp[6 * 6];
+    float temp[6 * 6];
     for (i = 0; i < n; i++)
     {
         for (j = 0; j < n; j++)
@@ -386,10 +401,10 @@ __device__ void getAStart(double *hessian, int n, double (*ans)[6])
     }
 }
 
-__device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
+__device__ void getMatrixInverse(float *hessian, int n, float (*des)[6])
 {
-    double flag = getA(hessian, n);
-    double t[6][6];
+    float flag = getA(hessian, n);
+    float t[6][6];
     if (flag == 0)
     {
         return;
@@ -408,9 +423,9 @@ __device__ void getMatrixInverse(double *hessian, int n, double (*des)[6])
 }
 
 // 按第一行展开计算|A|
-__device__ double getA3(double *arcs, int n)
+__device__ float getA3(float *arcs, int n)
 {
-    double ans = 0;
+    float ans = 0;
     int iter_num = 1;
     while (iter_num <= n)
     {
@@ -419,7 +434,7 @@ __device__ double getA3(double *arcs, int n)
             iter_num++;
             continue;
         }
-        double temp[3 * 3] = {0.0};
+        float temp[3 * 3] = {0.0};
         int i, j, k;
         for (i = 0; i < iter_num; i++)
         {
@@ -447,7 +462,7 @@ __device__ double getA3(double *arcs, int n)
 
 
 // 计算每一行每一列的每个元素所对应的余子式，组成A*
-__device__ int getAStart3(double *arcs, int n, double ans[3][3])
+__device__ int getAStart3(float *arcs, int n, float ans[3][3])
 {
     if (n == 1)
     {
@@ -455,7 +470,7 @@ __device__ int getAStart3(double *arcs, int n, double ans[3][3])
         return 0;
     }
     int i, j, k, t;
-    double temp[3*3];
+    float temp[3*3];
     for (i = 0; i < n; i++)
     {
         for (j = 0; j < n; j++)
@@ -479,10 +494,10 @@ __device__ int getAStart3(double *arcs, int n, double ans[3][3])
 }
 
 
-__device__ void getMatrixInverse3(double *src, int n, double (*des)[3])
+__device__ void getMatrixInverse3(float *src, int n, float (*des)[3])
 {
-    double flag = getA3(src, n);
-    double t[3][3];
+    float flag = getA3(src, n);
+    float t[3][3];
     if (flag == 0)
     {
         return;
@@ -536,7 +551,7 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
 }
 
 __device__ void calTargetImageSubRegion(int subset, int sideW, int maxIterNum, uchar *_origin_image_target,
-                                        double (*warP)[3], float *_target_value_intp, float *_sum_target_intp)
+                                        float (*warP)[3], float *_target_value_intp, float *_sum_target_intp)
 {
 
     float MBT[4][4] = {{-0.166666666666667, 0.5, -0.5, 0.166666666666667},
@@ -659,15 +674,15 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
 
     __syncthreads();
 
-    double hessian[6 * 6] = {0};
+    float hessian[6 * 6] = {0};
     float sum = 0.0f;
     float squa_sum = 0.0f;
     float mean_value = 0.0f;
     float deltaMean = 0.0f;
     float ref_image_value[SUBREGION_NUM] = {0};
-    double Jacobian[SUBREGION_NUM][6];
+    float Jacobian[SUBREGION_NUM][6];
     int n = 0;
-    // if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
+    //if ((g_x - halfWinSize) >= 0 && (g_x + halfWinSize) < width && (g_y - halfWinSize) >= 0 && (g_y + halfWinSize) < height)
     {
         for (int j = -halfSubset; j <= halfSubset; j++) // y
         {
@@ -678,10 +693,7 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
                 sum += image_value;
                 squa_sum += image_value * image_value;
                 ref_image_value[n] = image_value;
-                if (blockIdx.x == 40 && blockIdx.y == 40)
-                {
-                    printf("ref_image_value[n]: %lf\n", ref_image_value[n]);
-                }
+                
                 Jacobian[n][0] = _x_grad_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
                 Jacobian[n][1] = Jacobian[n][0] * double(k) / double(halfSubset + 1); // x;
                 Jacobian[n][2] = Jacobian[n][0] * double(j) / double(halfSubset + 1); // y;
@@ -689,6 +701,12 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
                 Jacobian[n][4] = Jacobian[n][3] * double(k) / double(halfSubset + 1);
                 Jacobian[n][5] = Jacobian[n][3] * double(j) / double(halfSubset + 1);
 
+                if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+                {
+                    printf("Jacobian[%d][0]: %lf,Jacobian[%d][1]: %lf,Jacobian[%d][2]: %lf,Jacobian[%d][3]: %lf,Jacobian[%d][4]: %lf,Jacobian[%d][5]: %lf\n", 
+                            n, Jacobian[n][0], n, Jacobian[n][1],n, Jacobian[n][2], 
+                            n, Jacobian[n][3], n, Jacobian[n][4],n, Jacobian[n][5]);
+                }
                 hessian[0]  += Jacobian[n][0] * Jacobian[n][0];
                 hessian[1]  += Jacobian[n][0] * Jacobian[n][1];
                 hessian[2]  += Jacobian[n][0] * Jacobian[n][2];
@@ -725,144 +743,230 @@ __global__ void calNewDisp(int subset, int sideW, int maxIterNum, int width, int
                 hessian[33] += Jacobian[n][5] * Jacobian[n][3];
                 hessian[34] += Jacobian[n][5] * Jacobian[n][4];
                 hessian[35] += Jacobian[n][5] * Jacobian[n][5];
-
+                if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+                {
+                    printf("000 n: %d, hessian[35]: %lf\n",n, hessian[35]);
+                }
                 n++;
             }
         }
     }
-    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
-    {
-        printf("1111\n");
-    }
-    if (sum == 0.0f)
-    {
-        return;
-    }
-    mean_value = float(sum) / float(SUBREGION_NUM);
-    deltaMean = squa_sum - sum * mean_value;
-    float ref_delta_vec[SUBREGION_NUM] = {0};
-    for (int i = 0; i < SUBREGION_NUM; i++)
-    {
-        ref_delta_vec[i] = ref_image_value[i] - mean_value;
-        if (blockIdx.x == 40 && blockIdx.y == 40 && threadIdx.y == 0 && threadIdx.x == 0)
-        {
-            printf("sum: %lf, mean_value: %lf, ref_delta_vec[i]: %lf, deltaMean: %lf, ref_image_value[i]: %lf\n",
-                   sum, mean_value, ref_delta_vec[i], deltaMean, ref_image_value[i]);
-        }
-    }
+    
+    // if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
+    // {
+    //     printf("1111\n");
+    // }
+    // if (sum == 0.0f)
+    // {
+    //     return;
+    // }
+    // mean_value = float(sum) / float(SUBREGION_NUM);
+    // deltaMean = squa_sum - sum * mean_value;
+    // float ref_delta_vec[SUBREGION_NUM] = {0};
+    // for (int i = 0; i < SUBREGION_NUM; i++)
+    // {
+    //     ref_delta_vec[i] = ref_image_value[i] - mean_value;
+    //     // if (blockIdx.x == 40 && blockIdx.y == 40 && threadIdx.y == 0 && threadIdx.x == 0)
+    //     // {
+    //     //     printf("sum: %lf, mean_value: %lf, ref_delta_vec[i]: %lf, deltaMean: %lf, ref_image_value[i]: %lf\n",
+    //     //            sum, mean_value, ref_delta_vec[i], deltaMean, ref_image_value[i]);
+    //     // }
+    // }
 
     __syncthreads();
-    
-    double invH[6][6] = {0};
+    if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+    {
+        printf("111 n: %d, hessian[35]: %lf\n", n, hessian[35]);
+    }
+    // if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+    // {
+    //     printf("111 hessian[0]: %lf,hessian[1]: %lf,hessian[2]: %lf,hessian[3]: %lf,hessian[4]: %lf,hessian[5]: %lf,\
+    //             hessian[6]: %lf,hessian[7]: %lf,hessian[8]: %lf,hessian[9]: %lf,hessian[10]: %lf,hessian[11]: %lf,\
+    //             hessian[12]: %lf,hessian[13]: %lf,hessian[14]: %lf,hessian[15]: %lf,hessian[16]: %lf,hessian[17]: %lf,\
+    //             hessian[18]: %lf,hessian[19]: %lf,hessian[20]: %lf,hessian[21]: %lf,hessian[22]: %lf,hessian[23]: %lf,\
+    //             hessian[24]: %lf,hessian[25]: %lf,hessian[26]: %lf,hessian[27]: %lf,hessian[28]: %lf,hessian[29]: %lf,\
+    //             hessian[30]: %lf,hessian[31]: %lf,hessian[32]: %lf,hessian[33]: %lf,hessian[34]: %lf,hessian[35]: %lf\n",
+    //             hessian[0] ,hessian[1] ,hessian[2] ,hessian[3] ,hessian[4] ,hessian[5] ,
+    //             hessian[6] ,hessian[7] ,hessian[8] ,hessian[9] ,hessian[10],hessian[11],
+    //             hessian[12],hessian[13],hessian[14],hessian[15],hessian[16],hessian[17],
+    //             hessian[18],hessian[19],hessian[20],hessian[21],hessian[22],hessian[23],
+    //             hessian[24],hessian[25],hessian[26],hessian[27],hessian[28],hessian[29],
+    //             hessian[30],hessian[31],hessian[32],hessian[33],hessian[34],hessian[35]);
+    //     // printf("invH[0][0]: %lf, invH[0][1]: %lf,invH[0][2]: %lf,invH[0][3]: %lf,invH[0][4]: %lf,invH[0][5]: %lf,\
+    //     //         invH[1][0]: %lf, invH[1][1]: %lf,invH[1][2]: %lf,invH[1][3]: %lf,invH[1][4]: %lf,invH[1][5]: %lf,\
+    //     //         invH[2][0]: %lf, invH[2][1]: %lf,invH[2][2]: %lf,invH[2][3]: %lf,invH[2][4]: %lf,invH[2][5]: %lf,\
+    //     //         invH[3][0]: %lf, invH[3][1]: %lf,invH[3][2]: %lf,invH[3][3]: %lf,invH[3][4]: %lf,invH[3][5]: %lf,\
+    //     //         invH[4][0]: %lf, invH[4][1]: %lf,invH[4][2]: %lf,invH[4][3]: %lf,invH[4][4]: %lf,invH[4][5]: %lf,\
+    //     //         invH[5][0]: %lf, invH[5][1]: %lf,invH[5][2]: %lf,invH[5][3]: %lf,invH[5][4]: %lf,invH[5][5]: %lf\n",
+    //     //         invH[0][0], invH[0][1],invH[0][2],invH[0][3],invH[0][4],invH[0][5],
+    //     //         invH[1][0], invH[1][1],invH[1][2],invH[1][3],invH[1][4],invH[1][5],
+    //     //         invH[2][0], invH[2][1],invH[2][2],invH[2][3],invH[2][4],invH[2][5],
+    //     //         invH[3][0], invH[3][1],invH[3][2],invH[3][3],invH[3][4],invH[3][5],
+    //     //         invH[4][0], invH[4][1],invH[4][2],invH[4][3],invH[4][4],invH[4][5],
+    //     //         invH[5][0], invH[5][1],invH[5][2],invH[5][3],invH[5][4],invH[5][5]);
+    // }
+    float invH[6][6] = {0};
     getMatrixInverse(hessian, 6, invH);
-    double invHJacob[SUBREGION_NUM * 6] = {0};
-    for (int j = 0; j < SUBREGION_NUM; j++)
+    if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
     {
-        invHJacob[j]                     = invH[0][0] * Jacobian[j][0] + invH[0][1] * Jacobian[j][1] + invH[0][2] * Jacobian[j][2] + invH[0][3] * Jacobian[j][3] + invH[0][4] * Jacobian[j][4] + invH[0][5] * Jacobian[j][5];
-        invHJacob[j + SUBREGION_NUM]     = invH[1][0] * Jacobian[j][0] + invH[1][1] * Jacobian[j][1] + invH[1][2] * Jacobian[j][2] + invH[1][3] * Jacobian[j][3] + invH[1][4] * Jacobian[j][4] + invH[1][5] * Jacobian[j][5];
-        invHJacob[j + 2 * SUBREGION_NUM] = invH[2][0] * Jacobian[j][0] + invH[2][1] * Jacobian[j][1] + invH[2][2] * Jacobian[j][2] + invH[2][3] * Jacobian[j][3] + invH[2][4] * Jacobian[j][4] + invH[2][5] * Jacobian[j][5];
-        invHJacob[j + 3 * SUBREGION_NUM] = invH[3][0] * Jacobian[j][0] + invH[3][1] * Jacobian[j][1] + invH[3][2] * Jacobian[j][2] + invH[3][3] * Jacobian[j][3] + invH[3][4] * Jacobian[j][4] + invH[3][5] * Jacobian[j][5];
-        invHJacob[j + 4 * SUBREGION_NUM] = invH[4][0] * Jacobian[j][0] + invH[4][1] * Jacobian[j][1] + invH[4][2] * Jacobian[j][2] + invH[4][3] * Jacobian[j][3] + invH[4][4] * Jacobian[j][4] + invH[4][5] * Jacobian[j][5];
-        invHJacob[j + 5 * SUBREGION_NUM] = invH[5][0] * Jacobian[j][0] + invH[5][1] * Jacobian[j][1] + invH[5][2] * Jacobian[j][2] + invH[5][3] * Jacobian[j][3] + invH[5][4] * Jacobian[j][4] + invH[5][5] * Jacobian[j][5];
+        printf("222 n: %d, hessian[35]: %lf\n", n, hessian[35]);
     }
-    
-    double warP[3][3] = {{1 + _init_p[1], _init_p[2], _init_p[0]},
-                         {_init_p[4], 1 + _init_p[5], _init_p[3]},
-                         {0, 0, 1}};
-    float thre = 1;
-    int Iter = 0;
-    float Czncc = 0;
-    while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
+    if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
     {
-        if(blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0){
-            printf("Iter: %d,thre: %f\n", Iter, thre);
-        }
-        
-        float target_value_intp[SUBREGION_NUM] = {0};
-        float target_sum_intp = 0;
-        calTargetImageSubRegion(subset, sideW, maxIterNum, &_target_image_sm[0], warP, &target_value_intp[0], &target_sum_intp);
-        float target_mean_intp = target_sum_intp / SUBREGION_NUM;
-        double target_delta_vec[SUBREGION_NUM] = {0};
-        double target_sum_delta = 0.0f;
-        
-        for (int j = 0; j < SUBREGION_NUM; j++)
+        for (int i = 0; i < 36; i++)
         {
-            target_delta_vec[j] = target_value_intp[j] - target_mean_intp;
-            target_sum_delta += (target_delta_vec[j] * target_delta_vec[j]);
+            printf("hessian[%d]: %f\n",i,hessian[i]);
         }
-        
-        double target_delta_sqrt = sqrt(target_sum_delta);
-        
-        double deltap[6] = {0};
-        for (int j = 0; j < subset * subset; j++)
+
+        for (int i = 0; i < 6; i++)
         {
-            float tmp = ref_delta_vec[j] - deltaMean / target_delta_sqrt * target_delta_vec[j];
-            if (blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
+            for (int j = 0; j < 6; j++)
             {
-                printf("tmp: %f, ref_delta_vec[j]: %lf, deltaMean: %lf,target_delta_sqrt: %lf, target_delta_vec[j]: %lf\n",
-                        tmp, ref_delta_vec[j], deltaMean,target_delta_sqrt, target_delta_vec[j]);
+                printf("invH[%d][%d]: %f\n", i ,j, invH[i][j]);
             }
-            deltap[0] += -invHJacob[j] * tmp;
-            deltap[1] += -invHJacob[j + SUBREGION_NUM] * tmp;
-            deltap[2] += -invHJacob[j + 2 * SUBREGION_NUM] * tmp;
-            deltap[3] += -invHJacob[j + 3 * SUBREGION_NUM] * tmp;
-            deltap[4] += -invHJacob[j + 4 * SUBREGION_NUM] * tmp;
-            deltap[5] += -invHJacob[j + 5 * SUBREGION_NUM] * tmp;
+            
         }
-        float M[6] = {1, 1.0f / subset, 1.0f / subset, 1, 1.0f / subset, 1.0f / subset};
-        deltap[0] = M[0] * deltap[0];
-        deltap[1] = M[1] * deltap[1];
-        deltap[2] = M[2] * deltap[2];
-        deltap[3] = M[3] * deltap[3];
-        deltap[4] = M[4] * deltap[4];
-        deltap[5] = M[5] * deltap[5];
-        //if (blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0)
-        {
-            printf("deltap[0]: %lf, deltap[1]: %lf, deltap[2]: %lf, deltap[3]: %lf,deltap[4]: %lf, deltap[5]: %lf\n",
-                   deltap[0], deltap[1], deltap[2], deltap[3], deltap[4], deltap[5]);
-        }
-        double delta_warp_p[3 * 3] = {1 + deltap[1], deltap[2], deltap[0],
-                                      deltap[4], 1 + deltap[5], deltap[3],
-                                      0, 0, 1};
-        double invwarpdelta[3][3] = {0};
-        getMatrixInverse3(delta_warp_p, 3, invwarpdelta);
-
-        double warP2[3][3] = {0};
-        warP2[0][0] = warP[0][0] * invwarpdelta[0][0] + warP[0][1] * invwarpdelta[1][0] + warP[0][2] * invwarpdelta[2][0];
-        warP2[0][1] = warP[0][0] * invwarpdelta[0][1] + warP[0][1] * invwarpdelta[1][1] + warP[0][2] * invwarpdelta[2][1];
-        warP2[0][2] = warP[0][0] * invwarpdelta[0][2] + warP[0][1] * invwarpdelta[1][2] + warP[0][2] * invwarpdelta[2][2];
-        warP2[1][0] = warP[1][0] * invwarpdelta[0][0] + warP[1][1] * invwarpdelta[1][0] + warP[1][2] * invwarpdelta[2][0];
-        warP2[1][1] = warP[1][0] * invwarpdelta[0][1] + warP[1][1] * invwarpdelta[1][1] + warP[1][2] * invwarpdelta[2][1];
-        warP2[1][2] = warP[1][0] * invwarpdelta[0][2] + warP[1][1] * invwarpdelta[1][2] + warP[1][2] * invwarpdelta[2][2];
-        warP2[2][0] = warP[2][0] * invwarpdelta[0][0] + warP[2][1] * invwarpdelta[1][0] + warP[2][2] * invwarpdelta[2][0];
-        warP2[2][1] = warP[2][0] * invwarpdelta[0][1] + warP[2][1] * invwarpdelta[1][1] + warP[2][2] * invwarpdelta[2][1];
-        warP2[2][2] = warP[2][0] * invwarpdelta[0][2] + warP[2][1] * invwarpdelta[1][2] + warP[2][2] * invwarpdelta[2][2];
-
-        warP[0][0] = warP2[0][0], warP[0][1] = warP2[0][1], warP[0][2] = warP2[0][2];
-        warP[1][0] = warP2[1][0], warP[1][1] = warP2[1][1], warP[1][2] = warP2[1][2];
-        warP[2][0] = warP2[2][0], warP[2][1] = warP2[2][1], warP[2][2] = warP2[2][2];
-
-        float delta_value = deltap[0] * deltap[0] + deltap[3] * deltap[3];
-        thre = sqrt(delta_value);
         
-        _init_p[0] = warP[0][2];
-        _init_p[1] = warP[0][0] - 1;
-        _init_p[2] = warP[0][1];
-        _init_p[3] = warP[1][2];
-        _init_p[4] = warP[1][0];
-        _init_p[5] = warP[1][1] - 1;
-        double Cznssd = 0;
-        for (int j = 0; j < subset * subset; j++)
-        {
-            double deltafg = (ref_delta_vec[j] / deltaMean - target_delta_vec[j] / target_delta_sqrt);
-            Cznssd += deltafg * deltafg;
-        }
-        Czncc = 1 - 0.5 * Cznssd;
-        Iter++;
+        
+        // printf("333 hessian[0]: %f,hessian[1]: %f,hessian[2]: %f,hessian[3]: %f,hessian[4]: %f,hessian[5]: %f,\
+        //         hessian[6]: %f,hessian[7]: %f,hessian[8]: %f,hessian[9]: %f,hessian[10]: %f,hessian[11]: %f,\
+        //         hessian[12]: %f,hessian[13]: %f,hessian[14]: %f,hessian[15]: %f,hessian[16]: %f,hessian[17]: %f,\
+        //         hessian[18]: %f,hessian[19]: %f,hessian[20]: %f,hessian[21]: %f,hessian[22]: %f,hessian[23]: %f,\
+        //         hessian[24]: %f,hessian[25]: %f,hessian[26]: %f,hessian[27]: %f,hessian[28]: %f,hessian[29]: %f,\
+        //         hessian[30]: %f,hessian[31]: %f,hessian[32]: %f,hessian[33]: %f,hessian[34]: %f,hessian[35]: %f\n",
+        //         hessian[0] ,hessian[1] ,hessian[2] ,hessian[3] ,hessian[4] ,hessian[5] ,
+        //         hessian[6] ,hessian[7] ,hessian[8] ,hessian[9] ,hessian[10],hessian[11],
+        //         hessian[12],hessian[13],hessian[14],hessian[15],hessian[16],hessian[17],
+        //         hessian[18],hessian[19],hessian[20],hessian[21],hessian[22],hessian[23],
+        //         hessian[24],hessian[25],hessian[26],hessian[27],hessian[28],hessian[29],
+        //         hessian[30],hessian[31],hessian[32],hessian[33],hessian[34],hessian[35]);
+        // printf("invH[0][0]: %lf, invH[0][1]: %lf,invH[0][2]: %lf,invH[0][3]: %lf,invH[0][4]: %lf,invH[0][5]: %lf,\
+        //         invH[1][0]: %lf, invH[1][1]: %lf,invH[1][2]: %lf,invH[1][3]: %lf,invH[1][4]: %lf,invH[1][5]: %lf,\
+        //         invH[2][0]: %lf, invH[2][1]: %lf,invH[2][2]: %lf,invH[2][3]: %lf,invH[2][4]: %lf,invH[2][5]: %lf,\
+        //         invH[3][0]: %lf, invH[3][1]: %lf,invH[3][2]: %lf,invH[3][3]: %lf,invH[3][4]: %lf,invH[3][5]: %lf,\
+        //         invH[4][0]: %lf, invH[4][1]: %lf,invH[4][2]: %lf,invH[4][3]: %lf,invH[4][4]: %lf,invH[4][5]: %lf,\
+        //         invH[5][0]: %lf, invH[5][1]: %lf,invH[5][2]: %lf,invH[5][3]: %lf,invH[5][4]: %lf,invH[5][5]: %lf\n",
+        //         invH[0][0], invH[0][1],invH[0][2],invH[0][3],invH[0][4],invH[0][5],
+        //         invH[1][0], invH[1][1],invH[1][2],invH[1][3],invH[1][4],invH[1][5],
+        //         invH[2][0], invH[2][1],invH[2][2],invH[2][3],invH[2][4],invH[2][5],
+        //         invH[3][0], invH[3][1],invH[3][2],invH[3][3],invH[3][4],invH[3][5],
+        //         invH[4][0], invH[4][1],invH[4][2],invH[4][3],invH[4][4],invH[4][5],
+        //         invH[5][0], invH[5][1],invH[5][2],invH[5][3],invH[5][4],invH[5][5]);
     }
-    float delta_disp = _init_p[3];
-    //printf("delta_disp: %f\n", delta_disp);
-    _opt_disp[(g_y + halfWinSize + threadIdx.y) * width + g_x + threadIdx.x + halfWinSize] += delta_disp;
+    // float invHJacob[SUBREGION_NUM * 6] = {0};
+    // for (int j = 0; j < SUBREGION_NUM; j++)
+    // {
+        
+    //     invHJacob[j]                     = invH[0][0] * Jacobian[j][0] + invH[0][1] * Jacobian[j][1] + invH[0][2] * Jacobian[j][2] + invH[0][3] * Jacobian[j][3] + invH[0][4] * Jacobian[j][4] + invH[0][5] * Jacobian[j][5];
+    //     invHJacob[j + SUBREGION_NUM]     = invH[1][0] * Jacobian[j][0] + invH[1][1] * Jacobian[j][1] + invH[1][2] * Jacobian[j][2] + invH[1][3] * Jacobian[j][3] + invH[1][4] * Jacobian[j][4] + invH[1][5] * Jacobian[j][5];
+    //     invHJacob[j + 2 * SUBREGION_NUM] = invH[2][0] * Jacobian[j][0] + invH[2][1] * Jacobian[j][1] + invH[2][2] * Jacobian[j][2] + invH[2][3] * Jacobian[j][3] + invH[2][4] * Jacobian[j][4] + invH[2][5] * Jacobian[j][5];
+    //     invHJacob[j + 3 * SUBREGION_NUM] = invH[3][0] * Jacobian[j][0] + invH[3][1] * Jacobian[j][1] + invH[3][2] * Jacobian[j][2] + invH[3][3] * Jacobian[j][3] + invH[3][4] * Jacobian[j][4] + invH[3][5] * Jacobian[j][5];
+    //     invHJacob[j + 4 * SUBREGION_NUM] = invH[4][0] * Jacobian[j][0] + invH[4][1] * Jacobian[j][1] + invH[4][2] * Jacobian[j][2] + invH[4][3] * Jacobian[j][3] + invH[4][4] * Jacobian[j][4] + invH[4][5] * Jacobian[j][5];
+    //     invHJacob[j + 5 * SUBREGION_NUM] = invH[5][0] * Jacobian[j][0] + invH[5][1] * Jacobian[j][1] + invH[5][2] * Jacobian[j][2] + invH[5][3] * Jacobian[j][3] + invH[5][4] * Jacobian[j][4] + invH[5][5] * Jacobian[j][5];
+    // }
+
+    // float warP[3][3] = {{1 + _init_p[1], _init_p[2], _init_p[0]},
+    //                     {_init_p[4], 1 + _init_p[5], _init_p[3]},
+    //                     {0, 0, 1}};
+    // float thre = 1;
+    // int Iter = 0;
+    // float Czncc = 0;
+    // while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
+    // {
+    //     // if(blockIdx.x == 38 && blockIdx.y == 0 && threadIdx.y == 0 && threadIdx.x == 0){
+    //     //     printf("Iter: %d,thre: %f\n", Iter, thre);
+    //     // }
+        
+    //     float target_value_intp[SUBREGION_NUM] = {0};
+    //     float target_sum_intp = 0;
+    //     calTargetImageSubRegion(subset, sideW, maxIterNum, &_target_image_sm[0], warP, &target_value_intp[0], &target_sum_intp);
+    //     float target_mean_intp = target_sum_intp / SUBREGION_NUM;
+    //     float target_delta_vec[SUBREGION_NUM] = {0};
+    //     float target_sum_delta = 0.0f;
+        
+    //     for (int j = 0; j < SUBREGION_NUM; j++)
+    //     {
+    //         target_delta_vec[j] = target_value_intp[j] - target_mean_intp;
+    //         target_sum_delta += (target_delta_vec[j] * target_delta_vec[j]);
+    //     }
+        
+    //     float target_delta_sqrt = sqrt(target_sum_delta);
+        
+    //     float deltap[6] = {0};
+    //     for (int j = 0; j < subset * subset; j++)
+    //     {
+    //         float tmp = ref_delta_vec[j] - deltaMean / target_delta_sqrt * target_delta_vec[j];
+    //         // if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+    //         // {
+    //         //     printf("j: %d,tmp: %f, invHJacob[%d]: %lf,ref_delta_vec[j]: %lf, deltaMean: %lf,target_delta_sqrt: %lf, target_delta_vec[j]: %lf\n",
+    //         //             j, tmp, j, invHJacob[j],ref_delta_vec[j], deltaMean,target_delta_sqrt, target_delta_vec[j]);
+    //         // }
+    //         deltap[0] += -invHJacob[j] * tmp;
+    //         deltap[1] += -invHJacob[j + SUBREGION_NUM] * tmp;
+    //         deltap[2] += -invHJacob[j + 2 * SUBREGION_NUM] * tmp;
+    //         deltap[3] += -invHJacob[j + 3 * SUBREGION_NUM] * tmp;
+    //         deltap[4] += -invHJacob[j + 4 * SUBREGION_NUM] * tmp;
+    //         deltap[5] += -invHJacob[j + 5 * SUBREGION_NUM] * tmp;
+    //     }
+    //     float M[6] = {1, 1.0f / subset, 1.0f / subset, 1, 1.0f / subset, 1.0f / subset};
+    //     deltap[0] = M[0] * deltap[0];
+    //     deltap[1] = M[1] * deltap[1];
+    //     deltap[2] = M[2] * deltap[2];
+    //     deltap[3] = M[3] * deltap[3];
+    //     deltap[4] = M[4] * deltap[4];
+    //     deltap[5] = M[5] * deltap[5];
+    //     // if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0)
+    //     // {
+    //     //     printf("deltap[0]: %lf, deltap[1]: %lf, deltap[2]: %lf, deltap[3]: %lf,deltap[4]: %lf, deltap[5]: %lf\n",
+    //     //            deltap[0], deltap[1], deltap[2], deltap[3], deltap[4], deltap[5]);
+    //     // }
+    //     float delta_warp_p[3 * 3] = {1 + deltap[1], deltap[2], deltap[0],
+    //                                   deltap[4], 1 + deltap[5], deltap[3],
+    //                                   0, 0, 1};
+    //     float invwarpdelta[3][3] = {0};
+    //     getMatrixInverse3(delta_warp_p, 3, invwarpdelta);
+
+
+    //     // float warP2[3][3] = {0};
+    //     // warP2[0][0] = warP[0][0] * invwarpdelta[0][0] + warP[0][1] * invwarpdelta[1][0] + warP[0][2] * invwarpdelta[2][0];
+    //     // warP2[0][1] = warP[0][0] * invwarpdelta[0][1] + warP[0][1] * invwarpdelta[1][1] + warP[0][2] * invwarpdelta[2][1];
+    //     // warP2[0][2] = warP[0][0] * invwarpdelta[0][2] + warP[0][1] * invwarpdelta[1][2] + warP[0][2] * invwarpdelta[2][2];
+    //     // warP2[1][0] = warP[1][0] * invwarpdelta[0][0] + warP[1][1] * invwarpdelta[1][0] + warP[1][2] * invwarpdelta[2][0];
+    //     // warP2[1][1] = warP[1][0] * invwarpdelta[0][1] + warP[1][1] * invwarpdelta[1][1] + warP[1][2] * invwarpdelta[2][1];
+    //     // warP2[1][2] = warP[1][0] * invwarpdelta[0][2] + warP[1][1] * invwarpdelta[1][2] + warP[1][2] * invwarpdelta[2][2];
+    //     // warP2[2][0] = warP[2][0] * invwarpdelta[0][0] + warP[2][1] * invwarpdelta[1][0] + warP[2][2] * invwarpdelta[2][0];
+    //     // warP2[2][1] = warP[2][0] * invwarpdelta[0][1] + warP[2][1] * invwarpdelta[1][1] + warP[2][2] * invwarpdelta[2][1];
+    //     // warP2[2][2] = warP[2][0] * invwarpdelta[0][2] + warP[2][1] * invwarpdelta[1][2] + warP[2][2] * invwarpdelta[2][2];
+
+    //     // warP[0][0] = warP2[0][0]; warP[0][1] = warP2[0][1]; warP[0][2] = warP2[0][2];
+    //     // warP[1][0] = warP2[1][0]; warP[1][1] = warP2[1][1]; warP[1][2] = warP2[1][2];
+    //     // warP[2][0] = warP2[2][0]; warP[2][1] = warP2[2][1]; warP[2][2] = warP2[2][2];
+
+    //     // float delta_value = deltap[0] * deltap[0] + deltap[3] * deltap[3];
+    //     // thre = sqrt(delta_value);
+        
+    //     // _init_p[0] = warP[0][2];
+    //     // _init_p[1] = warP[0][0] - 1;
+    //     // _init_p[2] = warP[0][1];
+    //     // _init_p[3] = warP[1][2];
+    //     // _init_p[4] = warP[1][0];
+    //     // _init_p[5] = warP[1][1] - 1;
+    //     // float Cznssd = 0;
+    //     // for (int j = 0; j < subset * subset; j++)
+    //     // {
+    //     //     float deltafg = (ref_delta_vec[j] / deltaMean - target_delta_vec[j] / target_delta_sqrt);
+    //     //     Cznssd += deltafg * deltafg;
+    //     // }
+    //     // Czncc = 1 - 0.5 * Cznssd;
+    //     Iter++;
+    // }
+    // float delta_disp = _init_p[3];
+    // // if (blockIdx.x == 39 && blockIdx.y == 2 && threadIdx.y == 0 && threadIdx.x == 0){
+    // //     printf("blockIdx.x: %d, blockIdx.y: %d, threadIdx.y: %d,threadIdx.x: %d, delta_disp: %f\n", 
+    // //         blockIdx.x, blockIdx.y, threadIdx.y, threadIdx.x, delta_disp);
+    // // }
+    
+    // _opt_disp[(g_y + halfWinSize + threadIdx.y) * width + g_x + threadIdx.x + halfWinSize] += delta_disp;
 }
 void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_src_disp, int subset, int sideW, int maxIter, cv::Mat &_result)
 {
@@ -884,11 +988,19 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
     cv::imwrite("x_gradient_image_cpu.tif", _x_gradient_image_cpu);
     cv::imwrite("y_gradient_image_cpu.tif", _y_gradient_image_cpu);
 
-    calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, _x_gradient_image,
-               _y_gradient_image, (float *)_src_disp.data, (float *)_result.data);
+    double *hessian_mat = nullptr;
+    generate_hessian_mat(subset, sideW, maxIter, _l_image.cols, _l_image.rows, _x_gradient_image, _y_gradient_image, hessian_mat);
+
+    cv::Mat hessian = cv::Mat(36, _l_image.cols * _l_image.rows, CV_64FC1);
+    cudaMemcpy(hessian.data, hessian_mat, _l_image.cols * _l_image.rows * 36 * sizeof(double), cudaMemcpyKind::cudaMemcpyDeviceToHost);
+
+    cv::imwrite("./hessian.tif", hessian);
+    // calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, _x_gradient_image,
+    //            _y_gradient_image, (float *)_src_disp.data, (float *)_result.data);
     
     cudaFree(_x_gradient_image);_x_gradient_image = nullptr;
     cudaFree(_y_gradient_image);_y_gradient_image = nullptr;
+    cudaFree(hessian_mat);hessian_mat = nullptr;
 }
 
 void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxIter, int width, int height, float *_x_gradient_image,
@@ -910,7 +1022,7 @@ void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxI
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
-    calHessianMat_kernel_opt<<<blocks, threads>>>(subset, sideW, width, height, _x_gradient_image, _y_gradient_image, _hessian_mat);
+    calHessianMat_kernel_opt_write_back<<<blocks, threads>>>(subset, sideW, width, height, _x_gradient_image, _y_gradient_image, _hessian_mat);
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
