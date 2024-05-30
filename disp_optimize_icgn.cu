@@ -7,6 +7,8 @@
 #include "device_launch_parameters.h"
 #define BLOCK_DATA_DIM_X 32
 #define BLOCK_DATA_DIM_Y 32
+#define SUB_THREAD_DIM_X 4
+#define SUB_THREAD_DIM_Y 4
 #define BLOCK_THREAD_DIM_X 8
 #define BLOCK_THREAD_DIM_Y 8
 #define NUM_PER_THREAD_X 4
@@ -328,7 +330,8 @@ __global__ void calHessianMat_kernel_opt_write_back(int subset, int sideW, int w
         // {
         //     printf("i: %d, blockIdx.y: %d, blockIdx.x: %d, threadIdx.y: %d, threadIdx.x: %d, thread_index: %d, g_index: %d,block_start_index: %d\n", 
         //     i, blockIdx.y, blockIdx.x, threadIdx.y, threadIdx.x,thread_index, g_index, block_start_index);
-        //
+        // }
+        
         _hessian_mat[g_index] = hessian[i];
     }
 
@@ -516,7 +519,7 @@ __device__ void getMatrixInverse3(float *src, int n, float (*des)[3])
 }
 
 __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uchar *_origin_src_image,
-                                float *_delta_image, float *_sigma_image)
+                                float *_mean_image, float *_sigma_image)
 {
     int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
     int thread_x = thread_index % BLOCK_DATA_DIM_X;
@@ -524,18 +527,22 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
 
     int halfSubset = subset / 2;
     int halfWinSize = halfSubset + sideW; // 7+5;
-    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
-    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    int g_x = blockIdx.x * BLOCK_DATA_DIM_X;
+    int g_y = blockIdx.y * BLOCK_DATA_DIM_Y;
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
     __shared__ uchar _src_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+    __shared__ float _mean_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
 
-    for (int i = 0; i < WARP_SIZE / 2; i++)
+    for (int i = 0; i < NUM_PER_THREAD_Y; i++)
     {
-        _src_image_sm[(thread_y * 16 + i) * BLOCK_DATA_DIM_X + thread_x] =
-            _origin_src_image[(g_y + thread_y * 16 + i) * width + g_x + thread_x];
+        uchar value = _origin_src_image[(g_y + thread_y + i * 8) * width + g_x + thread_x];
+        _src_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
+        _mean_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
     }
     __syncthreads();
+
+
     float sum = 0.0f;
     for (int j = -halfSubset; j <= halfSubset; j++) // y
     {
@@ -547,8 +554,114 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
     }
     float mean_value = float(sum) / float(subset * subset);
     __syncthreads();
+    int block_thread_index = thread_index / 4;
+    int block_thread_x = block_thread_index % 8;
+    int block_thread_y = block_thread_index / 8;
+
+    int g_sub_thread_index = thread_index % 4; 
+    int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
+    int sub_thread_x = g_sub_thread_index % 2;
+    int sub_thread_y = g_sub_thread_index / 2;
+    int num_x = halfSubset + 1;
+    int num_y = halfSubset + 1;
+    for (int r = num_y / 2; r > 0; r >> 1)
+    {
+        for (int c = num_x / 2; c > 0; c >> 1)
+        {
+            for (int iRow = 0; iRow < r / 2; iRow++)
+            {
+                for (int iCol = 0; iCol < c / 2; iCol++)
+                {
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+                }
+                
+            }
+        }
+    }
+
+
+    
 }
 
+__global__ void calMeanImage(int subset, int sideW, int width, int height, uchar *_src_image, float *_mean_image){
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % BLOCK_DATA_DIM_X;
+    int thread_y = thread_index / BLOCK_DATA_DIM_X;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * BLOCK_DATA_DIM_X;
+    int g_y = blockIdx.y * BLOCK_DATA_DIM_Y;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+    __shared__ uchar _src_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+    __shared__ float _mean_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
+
+    for (int i = 0; i < NUM_PER_THREAD_Y; i++)
+    {
+        uchar value = _origin_src_image[(g_y + thread_y + i * 8) * width + g_x + thread_x];
+        _src_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
+        _mean_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
+    }
+    __syncthreads();
+
+
+    float sum = 0.0f;
+    for (int j = -halfSubset; j <= halfSubset; j++) // y
+    {
+        for (int k = -halfSubset; k <= halfSubset; k++) // x
+        {
+            uchar value = _src_image_sm[(halfWinSize + threadIdx.y + k) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y + halfWinSize + j + threadIdx.x];
+            sum += value;
+        }
+    }
+    float mean_value = float(sum) / float(subset * subset);
+    __syncthreads();
+    int block_thread_index = thread_index / 4;
+    int block_thread_x = block_thread_index % 8;
+    int block_thread_y = block_thread_index / 8;
+
+    int g_sub_thread_index = thread_index % 4; 
+    int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
+    int sub_thread_x = g_sub_thread_index % 2;
+    int sub_thread_y = g_sub_thread_index / 2;
+    int num_x = halfSubset + 1;
+    int num_y = halfSubset + 1;
+    for (int r = num_y / 2; r > 0; r >> 1)
+    {
+        for (int c = num_x / 2; c > 0; c >> 1)
+        {
+            for (int iRow = 0; iRow < r / 2; iRow++)
+            {
+                for (int iCol = 0; iCol < c / 2; iCol++)
+                {
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+                    
+                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+                }
+                
+            }
+        }
+    }
+}
 __device__ void calTargetImageSubRegion(int subset, int sideW, int maxIterNum, uchar *_origin_image_target,
                                         float (*warP)[3], float *_target_value_intp, float *_sum_target_intp)
 {
