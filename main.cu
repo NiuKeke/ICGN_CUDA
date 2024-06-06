@@ -96,6 +96,39 @@ __global__ void mean_image(int subset, int sideW, int width, int height, float *
     int g_y = blockIdx.y * 32;
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
+
+    const int lane_id = thread_index % 8;
+    
+    float sum = 0.0f;
+    float buffer = 0;
+    for (int j = -halfSubset; j <= halfSubset; j++)
+    {
+        for (int k = -(halfSubset + lane_id); k < (halfSubset + 8 - lane_id); k++)
+        {
+            if(lane_id == 0){
+                buffer = _src_image[(g_y + halfWinSize + threadIdx.y + j) * width + g_x + halfWinSize + threadIdx.x + k];
+            }
+            buffer = __shfl_sync(0xFFFFFFFFU, buffer, 0);
+            if(k >= -7 && k <= 7){
+                sum += buffer;
+            }
+        }
+    }
+    float mean_value = float(sum) / float(subset * subset);
+    _dst_image[(g_y + halfWinSize + threadIdx.y) * width + g_x + halfWinSize + threadIdx.x] = mean_value;
+}
+
+__global__ void mean_image_sm(int subset, int sideW, int width, int height, float *_src_image, float *_dst_image){
+    int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
+    int thread_x = thread_index % 32;
+    int thread_y = thread_index / 32;
+
+    int halfSubset = subset / 2;
+    int halfWinSize = halfSubset + sideW; // 7+5;
+    int g_x = blockIdx.x * 32;
+    int g_y = blockIdx.y * 32;
+    g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
+    g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
     __shared__ float _src_image_sm[32 * 32]; // 4k
 
     for (int i = 0; i < 16; ++i)
