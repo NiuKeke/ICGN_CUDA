@@ -554,40 +554,40 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
     }
     float mean_value = float(sum) / float(subset * subset);
     __syncthreads();
-    int block_thread_index = thread_index / 4;
-    int block_thread_x = block_thread_index % 8;
-    int block_thread_y = block_thread_index / 8;
+    // int block_thread_index = thread_index / 4;
+    // int block_thread_x = block_thread_index % 8;
+    // int block_thread_y = block_thread_index / 8;
 
-    int g_sub_thread_index = thread_index % 4; 
-    int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
-    int sub_thread_x = g_sub_thread_index % 2;
-    int sub_thread_y = g_sub_thread_index / 2;
-    int num_x = halfSubset + 1;
-    int num_y = halfSubset + 1;
-    for (int r = num_y / 2; r > 0; r >> 1)
-    {
-        for (int c = num_x / 2; c > 0; c >> 1)
-        {
-            for (int iRow = 0; iRow < r / 2; iRow++)
-            {
-                for (int iCol = 0; iCol < c / 2; iCol++)
-                {
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+    // int g_sub_thread_index = thread_index % 4; 
+    // int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
+    // int sub_thread_x = g_sub_thread_index % 2;
+    // int sub_thread_y = g_sub_thread_index / 2;
+    // int num_x = halfSubset + 1;
+    // int num_y = halfSubset + 1;
+    // for (int r = num_y / 2; r > 0; r >> 1)
+    // {
+    //     for (int c = num_x / 2; c > 0; c >> 1)
+    //     {
+    //         for (int iRow = 0; iRow < r / 2; iRow++)
+    //         {
+    //             for (int iCol = 0; iCol < c / 2; iCol++)
+    //             {
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
-                }
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+    //             }
                 
-            }
-        }
-    }
+    //         }
+    //     }
+    // }
 
 
     
@@ -607,12 +607,13 @@ __global__ void calMeanImage(int subset, int sideW, int width, int height, uchar
     __shared__ uchar _src_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
     __shared__ float _mean_image_sm[BLOCK_DATA_DIM_X * BLOCK_DATA_DIM_Y]; // 4k
 
-    for (int i = 0; i < NUM_PER_THREAD_Y; i++)
-    {
-        uchar value = _origin_src_image[(g_y + thread_y + i * 8) * width + g_x + thread_x];
-        _src_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
-        _mean_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
-    }
+
+    // for (int i = 0; i < NUM_PER_THREAD_Y; i++)
+    // {
+    //     uchar value = _origin_src_image[(g_y + thread_y + i * 8) * width + g_x + thread_x];
+    //     _src_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
+    //     _mean_image_sm[(thread_y + i * 8) * BLOCK_DATA_DIM_X + thread_x] = value;
+    // }
     __syncthreads();
 
 
@@ -627,40 +628,40 @@ __global__ void calMeanImage(int subset, int sideW, int width, int height, uchar
     }
     float mean_value = float(sum) / float(subset * subset);
     __syncthreads();
-    int block_thread_index = thread_index / 4;
-    int block_thread_x = block_thread_index % 8;
-    int block_thread_y = block_thread_index / 8;
+    // int block_thread_index = thread_index / 4;
+    // int block_thread_x = block_thread_index % 8;
+    // int block_thread_y = block_thread_index / 8;
 
-    int g_sub_thread_index = thread_index % 4; 
-    int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
-    int sub_thread_x = g_sub_thread_index % 2;
-    int sub_thread_y = g_sub_thread_index / 2;
-    int num_x = halfSubset + 1;
-    int num_y = halfSubset + 1;
-    for (int r = num_y / 2; r > 0; r >> 1)
-    {
-        for (int c = num_x / 2; c > 0; c >> 1)
-        {
-            for (int iRow = 0; iRow < r / 2; iRow++)
-            {
-                for (int iCol = 0; iCol < c / 2; iCol++)
-                {
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+    // int g_sub_thread_index = thread_index % 4; 
+    // int g_block_thread_index = block_thread_index * 4 + sub_thread_index_x;
+    // int sub_thread_x = g_sub_thread_index % 2;
+    // int sub_thread_y = g_sub_thread_index / 2;
+    // int num_x = halfSubset + 1;
+    // int num_y = halfSubset + 1;
+    // for (int r = num_y / 2; r > 0; r >> 1)
+    // {
+    //     for (int c = num_x / 2; c > 0; c >> 1)
+    //     {
+    //         for (int iRow = 0; iRow < r / 2; iRow++)
+    //         {
+    //             for (int iCol = 0; iCol < c / 2; iCol++)
+    //             {
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow + r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol + c];
                     
-                    _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
-                        += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
-                }
+    //                 _mean_image_sm[(halfWinSize + block_thread_y + sub_thread_y + iRow) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol] 
+    //                     += _src_image_sm[(halfWinSize + block_thread_y + + sub_thread_y + iRow - r) * 32 + halfWinSize + block_thread_x + sub_thread_x + iCol - c];
+    //             }
                 
-            }
-        }
-    }
+    //         }
+    //     }
+    // }
 }
 __device__ void calTargetImageSubRegion(int subset, int sideW, int maxIterNum, uchar *_origin_image_target,
                                         float (*warP)[3], float *_target_value_intp, float *_sum_target_intp)
