@@ -50,11 +50,10 @@ int main(int argc, char **argv) {
     calImage(width, height, l_image);
     calImage(width, height, r_image);*/
 
-    cv::waitKey(0);
     int subset = 15;
     int sideW = 5;
     int maxIter = 15;
-    cv::Mat optDisp = float_disp.clone();
+    cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
     CDispOptimizeICGN_GPU disp_optimize;
     disp_optimize.run(l_image, r_image, float_disp, subset, sideW, maxIter, optDisp);
     // CDispOptimizeICGN_CPU disp_optimize_cpu;

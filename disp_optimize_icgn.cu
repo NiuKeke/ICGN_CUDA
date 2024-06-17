@@ -598,21 +598,34 @@ __device__ void mul(float A[N][N], float B[N][N], float C[N][N])
         }
     }
 }
-__device__ void inverse3x3(double a[3][3], double inv[3][3])
+__device__ void inverse3x3(float *a, float (*inv)[3])
 {
-    double det = a[0][0] * (a[1][1] * a[2][2] - a[2][1] * a[1][2]) -
-                 a[1][0] * (a[0][1] * a[2][2] - a[2][1] * a[0][2]) +
-                 a[2][0] * (a[0][1] * a[1][2] - a[1][1] * a[0][2]);
-
-    inv[0][0] = (a[1][1] * a[2][2] - a[2][1] * a[1][2]) / det;
-    inv[0][1] = (a[2][1] * a[0][2] - a[0][1] * a[2][2]) / det;
-    inv[0][2] = (a[0][1] * a[1][2] - a[1][1] * a[0][2]) / det;
-    inv[1][0] = (a[2][0] * a[1][2] - a[1][0] * a[2][2]) / det;
-    inv[1][1] = (a[0][0] * a[2][2] - a[2][0] * a[0][2]) / det;
-    inv[1][2] = (a[1][0] * a[0][2] - a[0][0] * a[1][2]) / det;
-    inv[2][0] = (a[1][0] * a[2][1] - a[2][0] * a[1][1]) / det;
-    inv[2][1] = (a[2][0] * a[0][1] - a[0][0] * a[2][1]) / det;
-    inv[2][2] = (a[0][0] * a[1][1] - a[1][0] * a[0][1]) / det;
+    float det =  a[0 * 3 + 0] * (a[1 * 3 + 1] * a[2 * 3 + 2] - a[2 * 3 + 1] * a[1 * 3 + 2]) -
+                 a[1 * 3 + 0] * (a[0 * 3 + 1] * a[2 * 3 + 2] - a[2 * 3 + 1] * a[0 * 3 + 2]) +
+                 a[2 * 3 + 0] * (a[0 * 3 + 1] * a[1 * 3 + 2] - a[1 * 3 + 1] * a[0 * 3 + 2]);
+    if (det != 0)
+    {
+        inv[0][0] = (a[1 * 3 + 1] * a[2 * 3 + 2] - a[2 * 3 + 1] * a[1 * 3 + 2]) / det;
+        inv[0][1] = (a[2 * 3 + 1] * a[0 * 3 + 2] - a[0 * 3 + 1] * a[2 * 3 + 2]) / det;
+        inv[0][2] = (a[0 * 3 + 1] * a[1 * 3 + 2] - a[1 * 3 + 1] * a[0 * 3 + 2]) / det;
+        inv[1][0] = (a[2 * 3 + 0] * a[1 * 3 + 2] - a[1 * 3 + 0] * a[2 * 3 + 2]) / det;
+        inv[1][1] = (a[0 * 3 + 0] * a[2 * 3 + 2] - a[2 * 3 + 0] * a[0 * 3 + 2]) / det;
+        inv[1][2] = (a[1 * 3 + 0] * a[0 * 3 + 2] - a[0 * 3 + 0] * a[1 * 3 + 2]) / det;
+        inv[2][0] = (a[1 * 3 + 0] * a[2 * 3 + 1] - a[2 * 3 + 0] * a[1 * 3 + 1]) / det;
+        inv[2][1] = (a[2 * 3 + 0] * a[0 * 3 + 1] - a[0 * 3 + 0] * a[2 * 3 + 1]) / det;
+        inv[2][2] = (a[0 * 3 + 0] * a[1 * 3 + 1] - a[1 * 3 + 0] * a[0 * 3 + 1]) / det;
+    }else
+    {
+        inv[0][0] = 1;
+        inv[0][1] = 0;
+        inv[0][2] = 0;
+        inv[1][0] = 0;
+        inv[1][1] = 1;
+        inv[1][2] = 0;
+        inv[2][0] = 0;
+        inv[2][1] = 0;
+        inv[2][2] = 1;
+    }
 }
 
 __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uchar *_origin_src_image,
@@ -969,68 +982,64 @@ __global__ void calTargetMeanImageAndSigma(int subset, int sideW, int width, int
             if (k >= -7 && k <= 7)
             {
                 float target_value_intp[4][4] = {0};
-                target_value_intp[0][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[0][0] = _origin_target_image[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + threadIdx.x];
-                target_value_intp[1][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[1][0] = _origin_target_image[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + threadIdx.x];
-                target_value_intp[2][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[2][0] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + threadIdx.x];
-                target_value_intp[3][0] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[3][0] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + threadIdx.x];
-                target_value_intp[0][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[0][1] = _origin_target_image[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 1 + threadIdx.x];
-                target_value_intp[1][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[1][1] = _origin_target_image[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 1 + threadIdx.x];
-                target_value_intp[2][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[2][1] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 1 + threadIdx.x];
-                target_value_intp[3][1] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[3][1] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 1 + threadIdx.x];
-                target_value_intp[0][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[0][2] = _origin_target_image[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 2 + threadIdx.x];
-                target_value_intp[1][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[1][2] = _origin_target_image[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 2 + threadIdx.x];
-                target_value_intp[2][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[2][2] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 2 + threadIdx.x];
-                target_value_intp[3][2] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[3][2] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 2 + threadIdx.x];
-                target_value_intp[0][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[0][3] = _origin_target_image[(halfWinSize + threadIdx.y + y_int - 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 3 + threadIdx.x];
-                target_value_intp[1][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[1][3] = _origin_target_image[(halfWinSize + threadIdx.y + y_int) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 3 + threadIdx.x];
-                target_value_intp[2][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[2][3] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 1) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 3 + threadIdx.x];
-                target_value_intp[3][3] = _origin_image_target[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
+                target_value_intp[3][3] = _origin_target_image[(halfWinSize + threadIdx.y + y_int + 2) * BLOCK_THREAD_DIM_Y * NUM_PER_THREAD_Y +
                                                                halfWinSize + x_int + 3 + threadIdx.x];
 
-                _target_value_intp[n] += target_value_intp[0][0] * weight_y[0] * weight_x[0];
-                _target_value_intp[n] += target_value_intp[1][0] * weight_y[1] * weight_x[0];
-                _target_value_intp[n] += target_value_intp[2][0] * weight_y[2] * weight_x[0];
-                _target_value_intp[n] += target_value_intp[3][0] * weight_y[3] * weight_x[0];
-                _target_value_intp[n] += target_value_intp[0][1] * weight_y[0] * weight_x[1];
-                _target_value_intp[n] += target_value_intp[1][1] * weight_y[1] * weight_x[1];
-                _target_value_intp[n] += target_value_intp[2][1] * weight_y[2] * weight_x[1];
-                _target_value_intp[n] += target_value_intp[3][1] * weight_y[3] * weight_x[1];
-                _target_value_intp[n] += target_value_intp[0][2] * weight_y[0] * weight_x[2];
-                _target_value_intp[n] += target_value_intp[1][2] * weight_y[1] * weight_x[2];
-                _target_value_intp[n] += target_value_intp[2][2] * weight_y[2] * weight_x[2];
-                _target_value_intp[n] += target_value_intp[3][2] * weight_y[3] * weight_x[2];
-                _target_value_intp[n] += target_value_intp[0][3] * weight_y[0] * weight_x[3];
-                _target_value_intp[n] += target_value_intp[1][3] * weight_y[1] * weight_x[3];
-                _target_value_intp[n] += target_value_intp[2][3] * weight_y[2] * weight_x[3];
-                _target_value_intp[n] += target_value_intp[3][3] * weight_y[3] * weight_x[3];
-
-
-
-
+                // _target_value_intp[n] += target_value_intp[0][0] * weight_y[0] * weight_x[0];
+                // _target_value_intp[n] += target_value_intp[1][0] * weight_y[1] * weight_x[0];
+                // _target_value_intp[n] += target_value_intp[2][0] * weight_y[2] * weight_x[0];
+                // _target_value_intp[n] += target_value_intp[3][0] * weight_y[3] * weight_x[0];
+                // _target_value_intp[n] += target_value_intp[0][1] * weight_y[0] * weight_x[1];
+                // _target_value_intp[n] += target_value_intp[1][1] * weight_y[1] * weight_x[1];
+                // _target_value_intp[n] += target_value_intp[2][1] * weight_y[2] * weight_x[1];
+                // _target_value_intp[n] += target_value_intp[3][1] * weight_y[3] * weight_x[1];
+                // _target_value_intp[n] += target_value_intp[0][2] * weight_y[0] * weight_x[2];
+                // _target_value_intp[n] += target_value_intp[1][2] * weight_y[1] * weight_x[2];
+                // _target_value_intp[n] += target_value_intp[2][2] * weight_y[2] * weight_x[2];
+                // _target_value_intp[n] += target_value_intp[3][2] * weight_y[3] * weight_x[2];
+                // _target_value_intp[n] += target_value_intp[0][3] * weight_y[0] * weight_x[3];
+                // _target_value_intp[n] += target_value_intp[1][3] * weight_y[1] * weight_x[3];
+                // _target_value_intp[n] += target_value_intp[2][3] * weight_y[2] * weight_x[3];
+                // _target_value_intp[n] += target_value_intp[3][3] * weight_y[3] * weight_x[3];
                 n++;
             }
         }
     }
-    float mean_value = float(sum) / float(subset * subset);
-    float sigma = float(sum_squre) - mean_value * float(sum);
-    sigma = sqrt(sigma);
-    _sigma_image[(g_y + halfWinSize + threadIdx.y) * width + g_x + halfWinSize + threadIdx.x] = sigma;
-    _mean_image[(g_y + halfWinSize + threadIdx.y) * width + g_x + halfWinSize + threadIdx.x] = mean_value;
+    // float mean_value = float(sum) / float(subset * subset);
+    // float sigma = float(sum_squre) - mean_value * float(sum);
+    // sigma = sqrt(sigma);
+    // _sigma_image[(g_y + halfWinSize + threadIdx.y) * width + g_x + halfWinSize + threadIdx.x] = sigma;
+    // _mean_image[(g_y + halfWinSize + threadIdx.y) * width + g_x + halfWinSize + threadIdx.x] = mean_value;
 }
 
 __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterNum, int width, int height,
@@ -1043,13 +1052,17 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
     
     int halfSubset = subset / 2;
     int halfWinSize = halfSubset + sideW; // 7+5;
-    int g_x = blockIdx.x * blockDim.x * NUM_PER_THREAD_X;
-    int g_y = blockIdx.y * blockDim.y * NUM_PER_THREAD_Y;
+    int g_x = blockIdx.x * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_X;
+    int g_y = blockIdx.y * BLOCK_THREAD_DIM_X * NUM_PER_THREAD_Y;
     g_x = (g_x - 2 * blockIdx.x * halfWinSize) < 0 ? 0 : (g_x - 2 * blockIdx.x * halfWinSize);
     g_y = (g_y - 2 * blockIdx.y * halfWinSize) < 0 ? 0 : (g_y - 2 * blockIdx.y * halfWinSize);
 
+
+    __syncthreads();
     __shared__ float _target_value_intp_sm[16 * 16];
+    __shared__ float _target_sigma_value_intp_sm[16 * 16];
     __shared__ float _hessian_inv_image_sm[BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_X * 36]; // 9k;
+    __shared__ float deltap_sm[6];
     int block_index = blockIdx.y * gridDim.x + blockIdx.x;
     for (int i = 0; i < 6 * 6; i++)
     {
@@ -1148,24 +1161,133 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
             _target_value_intp += target_value_intp[2][3] * weight_y[2] * weight_x[3];
             _target_value_intp += target_value_intp[3][3] * weight_y[3] * weight_x[3];
 
-            
-        }
-        _target_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp;
-        for (int r = thread_y / 2; r > 0; r >> 1)
-        {
-            for (int c = thread_x / 2; c > 0; c >> 1)
+            _target_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp;
+            _target_sigma_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp * _target_value_intp;
+            __syncthreads();
+
+            for (int r = 16 / 2; r > 0; r >>= 1)
             {
-                if(thread_y < r && thread_x < c){
-                    _target_value_intp_sm[thread_y * 16 + thread_x] += _target_value_intp_sm[(thread_y + r) * 16 + (thread_x + c)]
+                for (int c = 16 / 2; c > 0; c >>= 1)
+                {
+                    if (thread_y < r && thread_x < c)
+                    {
+                        _target_value_intp_sm[thread_y * 16 + thread_x] += _target_value_intp_sm[(thread_y + r) * 16 + (thread_x + c)];
+                        _target_sigma_value_intp_sm[thread_y * 16 + thread_x] += _target_sigma_value_intp_sm[(thread_y + r) * 16 + (thread_x + c)];
+                    }
+                    __syncthreads();
+                }
+            }
+            __syncthreads();
+            float target_value_sum = _target_value_intp_sm[0];
+            float target_mean_value = target_value_sum / float(subset * subset);
+            float target_delta_squar = _target_sigma_value_intp_sm[0] - target_value_sum * target_mean_value;
+            target_delta_squar = sqrt(target_delta_squar);
+            __syncthreads();
+
+            int index                   = (g_y + halfWinSize + thread_y - halfSubset + iRow) * width + g_x + halfWinSize + thread_x - halfSubset + iCol;
+            int sub_region_index        = (g_y + halfWinSize + iRow) * width + g_x + halfWinSize + iCol;
+            uchar image_value_ref       = _origin_image_ref[index];
+            float mean_image_value_ref  = _mean_image[sub_region_index];
+            float sigma_image_value_ref = _sigma_image_gpu[sub_region_index];
+
+            float ref_delta_mean_value = image_value_ref - mean_image_value_ref;
+
+            float Jacobian[6] = {0};
+            Jacobian[0] = _x_grad_image[index];
+            Jacobian[3] = _y_grad_image[index];
+            float coord_weight[2] = {0};
+            coord_weight[0] = float(thread_y - halfSubset) / float(halfSubset + 1);
+            coord_weight[1] = float(thread_x - halfSubset) / float(halfSubset + 1);
+
+            Jacobian[1] = Jacobian[0] * coord_weight[0]; // x;
+            Jacobian[2] = Jacobian[0] * coord_weight[1]; // y;
+            Jacobian[4] = Jacobian[3] * coord_weight[0];
+            Jacobian[5] = Jacobian[3] * coord_weight[1];
+
+            float invHJacobian[6] = {0};
+            for (int jRow = 0; jRow < 6; jRow++)
+            {
+                for (int jCol = 0; jCol < 6; jCol++)
+                {
+                    int g_index_sm = jRow * 6 + jCol;
+                    int tmp_index = g_index_sm * BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y + iRow * BLOCK_THREAD_DIM_X + iCol;
+                    if(tmp_index > BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_X * 36){
+                        printf("tmp_index: %d\n", tmp_index);
+                    }
+                    invHJacobian[jCol] += _hessian_inv_image_sm[tmp_index] * Jacobian[jCol];
+                }
+            }
+
+            float thre = 1;
+            int Iter = 0;
+            float Czncc = 0;
+            while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
+            {
+                if(thread_index < 6){
+                    deltap_sm[thread_index] = 0.0f;
                 }
                 __syncthreads();
+                float target_delta_mean_value = (_target_value_intp_sm[thread_y * 16 + thread_x] - target_mean_value);
+                float tmp = 0;
+                if(target_delta_mean_value != 0 && target_delta_squar != 0){
+                    tmp = ref_delta_mean_value - sigma_image_value_ref / target_delta_squar * target_delta_mean_value;
+                }
+                float deltap[6] = {0};
+                deltap[0] = -invHJacobian[0] * tmp;
+                deltap[1] = -invHJacobian[1] * tmp;
+                deltap[2] = -invHJacobian[2] * tmp;
+                deltap[3] = -invHJacobian[3] * tmp;
+                deltap[4] = -invHJacobian[4] * tmp;
+                deltap[5] = -invHJacobian[5] * tmp;
+
+                float M[6] = {1, 1.0f / subset, 1.0f / subset, 1, 1.0f / subset, 1.0f / subset};
+                deltap[0] = M[0] * deltap[0];
+                deltap[1] = M[1] * deltap[1];
+                deltap[2] = M[2] * deltap[2];
+                deltap[3] = M[3] * deltap[3];
+                deltap[4] = M[4] * deltap[4];
+                deltap[5] = M[5] * deltap[5];
+
+                __syncthreads();
+
+                atomicAdd(&deltap_sm[0], deltap[0]);
+                atomicAdd(&deltap_sm[1], deltap[1]);
+                atomicAdd(&deltap_sm[2], deltap[2]);
+                atomicAdd(&deltap_sm[3], deltap[3]);
+                atomicAdd(&deltap_sm[4], deltap[4]);
+                atomicAdd(&deltap_sm[5], deltap[5]);
+
+
+                float delta_warp_p[3 * 3] = {1 + deltap[1], deltap[2], deltap[0],
+                                             deltap[4], 1 + deltap[5], deltap[3],
+                                             0, 0, 1};
+                float invwarpdelta[3][3] = {0};
+                inverse3x3(delta_warp_p, invwarpdelta);
+                float warP2[3][3] = {0};
+                warP2[0][0] = warP[0][0] * invwarpdelta[0][0] + warP[0][1] * invwarpdelta[1][0] + warP[0][2] * invwarpdelta[2][0];
+                warP2[0][1] = warP[0][0] * invwarpdelta[0][1] + warP[0][1] * invwarpdelta[1][1] + warP[0][2] * invwarpdelta[2][1];
+                warP2[0][2] = warP[0][0] * invwarpdelta[0][2] + warP[0][1] * invwarpdelta[1][2] + warP[0][2] * invwarpdelta[2][2];
+                warP2[1][0] = warP[1][0] * invwarpdelta[0][0] + warP[1][1] * invwarpdelta[1][0] + warP[1][2] * invwarpdelta[2][0];
+                warP2[1][1] = warP[1][0] * invwarpdelta[0][1] + warP[1][1] * invwarpdelta[1][1] + warP[1][2] * invwarpdelta[2][1];
+                warP2[1][2] = warP[1][0] * invwarpdelta[0][2] + warP[1][1] * invwarpdelta[1][2] + warP[1][2] * invwarpdelta[2][2];
+                warP2[2][0] = warP[2][0] * invwarpdelta[0][0] + warP[2][1] * invwarpdelta[1][0] + warP[2][2] * invwarpdelta[2][0];
+                warP2[2][1] = warP[2][0] * invwarpdelta[0][1] + warP[2][1] * invwarpdelta[1][1] + warP[2][2] * invwarpdelta[2][1];
+                warP2[2][2] = warP[2][0] * invwarpdelta[0][2] + warP[2][1] * invwarpdelta[1][2] + warP[2][2] * invwarpdelta[2][2];
+
+                warP[0][0] = warP2[0][0]; warP[0][1] = warP2[0][1]; warP[0][2] = warP2[0][2];
+                warP[1][0] = warP2[1][0]; warP[1][1] = warP2[1][1]; warP[1][2] = warP2[1][2];
+                warP[2][0] = warP2[2][0]; warP[2][1] = warP2[2][1]; warP[2][2] = warP2[2][2];
+
+                float delta_value = deltap[0] * deltap[0] + deltap[3] * deltap[3];
+                thre = sqrt(delta_value);
+                Iter++;
             }
+            __syncthreads();
+            int disp_index = (g_y + halfWinSize + iRow) * width + g_x + halfWinSize + iCol;
+            _opt_disp[disp_index] = _origin_disp[disp_index] + warP[1][2];
         }
 
-
-
         __syncthreads();
-        
     }
 }
 
@@ -1196,10 +1318,13 @@ __global__ void calOptDisp(int subset, int sideW, int maxIterNum, int width, int
         _hessian_inv_image_sm[i * BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y + thread_index] = _hessian_inv_image[g_index];
     }
     __syncthreads();
-
+    float warP[3][3] = {{1 + _init_p[1], _init_p[2], _init_p[0]},
+                        {_init_p[4], 1 + _init_p[5], _init_p[3]},
+                        {0, 0, 1}};
     const int lane_id = thread_index % 8;
     int n = 0;
-    
+    float thre = 0.0f;
+    int Iter = 0;
     while (thre > 1e-3 && Iter < maxIterNum || Iter == 0)
     {
         float _mean_target_intp = 0.0f;
@@ -1303,7 +1428,6 @@ __global__ void calOptDisp(int subset, int sideW, int maxIterNum, int width, int
                     _mean_target_intp += _target_value_intp;
                     _sum_target_intp += _target_value_intp * _target_value_intp;
 
-                    _target_delta_intp_sm
                 }
             }
         }
@@ -1321,6 +1445,7 @@ __global__ void calOptDisp(int subset, int sideW, int maxIterNum, int width, int
                 uchar image_value_ref = _origin_image_ref[g_index];
                 float mean_image_value_ref = _mean_image[g_index];
                 float sigma_image_value_ref = _sigma_image_gpu[g_index];
+
                 float Jacobian[6] = {0};
                 Jacobian[0] = _x_grad_image[g_index];
                 Jacobian[3] = _y_grad_image[g_index];
@@ -1604,15 +1729,21 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
 
         cv::imwrite("./hessian_inv_image.tif", hessian_inv_image);
     }
-    // calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, _x_gradient_image,
-    //_y_gradient_image, _mean_image_gpu,_sigma_image_gpu, (float *)_src_disp.data, (float *)_result.data);
+    calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, 
+    _x_gradient_image, _y_gradient_image, _mean_image_gpu,_sigma_image_gpu, hessian_inv, 
+    (float *)_src_disp.data, (float *)_result.data);
 
+    {
+        cv::imwrite("./disp_result.tif", _result);
+    }
+    printf("3333\n");
     cudaFree(_x_gradient_image);
     _x_gradient_image = nullptr;
     cudaFree(_y_gradient_image);
     _y_gradient_image = nullptr;
     cudaFree(hessian_mat);
     hessian_mat = nullptr;
+    printf("4444\n");
 }
 
 void CDispOptimizeICGN_GPU::generate_hessian_mat(int subset, int sideW, int maxIter, int width, int height,
@@ -1719,7 +1850,7 @@ void CDispOptimizeICGN_GPU::generate_gradient_image(cv::Mat &_l_image, cv::Mat &
 
 void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int width, int height,
                                        uchar *_origin_image_ref, uchar *_origin_image_target, float *_x_gradient_image,
-                                       float *_y_gradient_image, float *_mean_image, float *_sigma_image_gpu,
+                                       float *_y_gradient_image, float *_mean_image, float *_sigma_image_gpu,float *_hessian_inv_image,
                                        float *_origin_disp_image, float *_opt_disp_image)
 {
     float *_origin_disp_image_gpu = nullptr;
@@ -1733,40 +1864,49 @@ void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int w
     cudaMalloc((void **)&_origin_image_ref_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_origin_image_target_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_init_p_gpu, 6 * sizeof(float));
+
     cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(float),
                cudaMemcpyHostToDevice);
     cudaMemcpy(_origin_image_ref_gpu, _origin_image_ref, width * height * sizeof(uchar),
                cudaMemcpyHostToDevice);
     cudaMemcpy(_origin_image_target_gpu, _origin_image_target, width * height * sizeof(uchar),
                cudaMemcpyHostToDevice);
+
     cudaMemcpy(_opt_disp_image_gpu, _opt_disp_image, width * height * sizeof(float),
                cudaMemcpyHostToDevice);
+
     cudaMemcpy(_init_p_gpu, &p[0], 6 * sizeof(float), cudaMemcpyHostToDevice);
+
+    // cudaMemset(_x_gradient_image, 0, width * height * sizeof(float));
+    // cudaMemset(_y_gradient_image, 0, width * height * sizeof(float));
 
     int halfSubset = subset / 2;
     int halfWinSize = halfSubset + sideW; // 7+5;
 
-    dim3 threads(8, 8);
-    dim3 blocks((width - 2 * halfWinSize + threads.x - 1) / (threads.x),
-                (height - 2 * halfWinSize + threads.y - 1) / (threads.y));
+    dim3 threads(16, 16);
+    dim3 blocks((width - 2 * halfWinSize + BLOCK_THREAD_DIM_X - 1) / (BLOCK_THREAD_DIM_X),
+                (height - 2 * halfWinSize + BLOCK_THREAD_DIM_X - 1) / (BLOCK_THREAD_DIM_X));
 
     printf("width: %d, height: %d, blocks.x: %d, blocks.y: %d, threads.x: %d, threads.y: %d\n",
            width, height, blocks.x, blocks.y, threads.x, threads.y);
+
     cudaEvent_t start, stop;
     float time = 0.0f;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start, 0);
-    /*calNewDisp<<<blocks, threads>>>(subset, sideW, maxIter, width, height, _init_p_gpu, _origin_image_ref_gpu,
+
+    calOptDisp_singleThreadBlock<<<blocks, threads>>>(subset, sideW, maxIter, width, height, _init_p_gpu, _origin_image_ref_gpu,
                                     _origin_image_target_gpu,
-                                    _x_gradient_image, _y_gradient_image,
-                                    _origin_disp_image_gpu, _opt_disp_image_gpu);*/
+                                    _x_gradient_image, _y_gradient_image,_mean_image, _sigma_image_gpu,
+                                    _hessian_inv_image, _origin_disp_image_gpu, _opt_disp_image_gpu);
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
     cudaDeviceSynchronize();
     printf("calOptDisp time: %f ms\n", time);
 
+    cv::Mat tmp = cv::Mat(height, width, CV_32FC1);
     cudaMemcpy(_opt_disp_image, _opt_disp_image_gpu, width * height * sizeof(float),
                cudaMemcpyDeviceToHost);
 
