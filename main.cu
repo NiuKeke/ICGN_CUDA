@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
 
     cv::Mat l_image = cv::imread(l_fileName, 0);
     cv::Mat r_image = cv::imread(r_fileName, 0);
+
     cv::Mat disp = cv::imread(disp_fileName, 0);
     cv::Mat float_disp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
     disp.copyTo(float_disp);
@@ -56,8 +57,8 @@ int main(int argc, char **argv) {
     cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
     CDispOptimizeICGN_GPU disp_optimize;
     disp_optimize.run(l_image, r_image, float_disp, subset, sideW, maxIter, optDisp);
-    // CDispOptimizeICGN_CPU disp_optimize_cpu;
-    // disp_optimize_cpu.run_old(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
+    CDispOptimizeICGN_CPU disp_optimize_cpu;
+    disp_optimize_cpu.run_old(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
 
     cv::imwrite("./result.png", optDisp);
 

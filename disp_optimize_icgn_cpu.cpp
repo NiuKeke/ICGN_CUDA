@@ -6,7 +6,7 @@
 void CDispOptimizeICGN_CPU::run_old(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_src_disp, int subset, int sideW, int maxIter,
                                     cv::Mat &_result)
 {
-
+    printf("CDispOptimizeICGN_CPU....in\n");
     // 生成左图像梯度影像,分为x,y两个方向;
     cv::Mat _x_gradient_image, _y_gradient_image;
     _x_gradient_image.create(_l_image.size(), CV_32FC1);
@@ -185,6 +185,7 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
                                     int *localSubHom, float *localSub, uchar *disp, double *dispFloat,
                                     int height, int width, int subset, int sideW, int maxIter)
 {
+    printf("ICGNalgo...in\n");
     int ImgSize = height * width;
     int halfSubset = subset / 2;
     int halfWinSize = halfSubset + sideW; // 7+5;
@@ -197,14 +198,18 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
     {
         int irow = i / width;
         int icol = i % width;
+        if(irow != 12 || icol != 332){
+            continue;
+        }
+        printf("irow: %d, icol: %d,disp[i]: %d\n", irow, icol, disp[i]);
         bool bRet = false;
         bRet = disp[i] > 0;
-        bRet &= (irow - halfWinSize > 0);
-        bRet &= (irow + halfWinSize < height);
-        bRet &= (icol - halfWinSize > 0);
-        bRet &= (icol + halfWinSize < width);
-        bRet &= (icol - disp[i] - halfWinSize > 0);
-        bRet &= (icol - disp[i] + halfWinSize < width);
+        // bRet &= (irow - halfWinSize > 0);
+        // bRet &= (irow + halfWinSize < height);
+        // bRet &= (icol - halfWinSize > 0);
+        // bRet &= (icol + halfWinSize < width);
+        // bRet &= (icol - disp[i] - halfWinSize > 0);
+        // bRet &= (icol - disp[i] + halfWinSize < width);
 
         if (bRet)
         {
@@ -238,13 +243,14 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
             double *dispBias = new double[2];
             memset(dispBias, 0.0, sizeof(double) * 2);
             bool bDebug = false;
-            if(i == 16961){
+            if(irow == 12 && icol == 332){
                 bDebug = true;
             }
             double H[6][6] = {0}; ////  Hessian matrix
-            // IterICGN2(ImRef, ImDef, gradxImgRef, gradyImgRef, localSubHom, localSub, p, pCoord, dispBias, maxIter, subset, halfSubset, sideW, length);
-            calHessian(irow, icol, ImRef, ImDef, gradxImgRef, gradyImgRef, localSubHom, localSub,
-                       p, pCoord, dispBias, maxIter, subset, halfSubset, sideW, length, H, bDebug);
+            IterICGN2(ImRef, ImDef, gradxImgRef, gradyImgRef, localSubHom, localSub, p, pCoord, 
+            dispBias, maxIter, subset, halfSubset, sideW, length, bDebug);
+            // calHessian(irow, icol, ImRef, ImDef, gradxImgRef, gradyImgRef, localSubHom, localSub,
+            //            p, pCoord, dispBias, maxIter, subset, halfSubset, sideW, length, H, bDebug);
             
             for (int n = 0; n < 36; n++)
             {
@@ -372,8 +378,9 @@ int CDispOptimizeICGN_CPU::calHessian(int row, int col, unsigned char *ImRef, un
 }
 int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef, float *gradxImgRef, float *gradyImgRef,
                                      int *localSubHom, float *localSub, float p[], int pCoord[], double *dispBias, int maxIter,
-                                     int subset, int halfSubset, int sideW, int length)
+                                     int subset, int halfSubset, int sideW, int length, bool bDebug)
 {
+    printf("IterICGN2...in\n");
     int sizeX = subset + 2 * sideW;
     int sizeY = subset + 2 * sideW;
     float M[6] = {1, 1.0f / subset, 1.0f / subset, 1, 1.0f / subset, 1.0f / subset};
@@ -448,13 +455,16 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
 
     double invH[6][6] = {0};
     GetMatrixInverse6(H, 6, invH);
+    if (bDebug)
+    {
+        std::cout << invH[0][0] << "    " << invH[0][1] << "    " << invH[0][2] << "    " << invH[0][3] << "    " << invH[0][4] << "    " << invH[0][5] << std::endl;
+        std::cout << invH[1][0] << "    " << invH[1][1] << "    " << invH[1][2] << "    " << invH[1][3] << "    " << invH[1][4] << "    " << invH[1][5] << std::endl;
+        std::cout << invH[2][0] << "    " << invH[2][1] << "    " << invH[2][2] << "    " << invH[2][3] << "    " << invH[2][4] << "    " << invH[2][5] << std::endl;
+        std::cout << invH[3][0] << "    " << invH[3][1] << "    " << invH[3][2] << "    " << invH[3][3] << "    " << invH[3][4] << "    " << invH[3][5] << std::endl;
+        std::cout << invH[4][0] << "    " << invH[4][1] << "    " << invH[4][2] << "    " << invH[4][3] << "    " << invH[4][4] << "    " << invH[4][5] << std::endl;
+        std::cout << invH[5][0] << "    " << invH[5][1] << "    " << invH[5][2] << "    " << invH[5][3] << "    " << invH[5][4] << "    " << invH[5][5] << std::endl;
+    }
 
-    // cout << invH[0][0] << "    " << invH[0][1] << "    " << invH[0][2] << "    " << invH[0][3] << "    " << invH[0][4] << "    " << invH[0][5] << endl;
-    // cout << invH[1][0] << "    " << invH[1][1] << "    " << invH[1][2] << "    " << invH[1][3] << "    " << invH[1][4] << "    " << invH[1][5] << endl;
-    // cout << invH[2][0] << "    " << invH[2][1] << "    " << invH[2][2] << "    " << invH[2][3] << "    " << invH[2][4] << "    " << invH[2][5] << endl;
-    // cout << invH[3][0] << "    " << invH[3][1] << "    " << invH[3][2] << "    " << invH[3][3] << "    " << invH[3][4] << "    " << invH[3][5] << endl;
-    // cout << invH[4][0] << "    " << invH[4][1] << "    " << invH[4][2] << "    " << invH[4][3] << "    " << invH[4][4] << "    " << invH[4][5] << endl;
-    // cout << invH[5][0] << "    " << invH[5][1] << "    " << invH[5][2] << "    " << invH[5][3] << "    " << invH[5][4] << "    " << invH[5][5] << endl;
     double *invHJacob = new double[6 * subset * subset];
     float *deltafVec = new float[subset * subset];
     float meanfSubset = sumfSubset / float(subset * subset);
@@ -467,12 +477,19 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
         invHJacob[j + 3 * subset * subset] = invH[3][0] * Jacobian[j] + invH[3][1] * Jacobian[j + subset * subset] + invH[3][2] * Jacobian[j + 2 * subset * subset] + invH[3][3] * Jacobian[j + 3 * subset * subset] + invH[3][4] * Jacobian[j + 4 * subset * subset] + invH[3][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 4 * subset * subset] = invH[4][0] * Jacobian[j] + invH[4][1] * Jacobian[j + subset * subset] + invH[4][2] * Jacobian[j + 2 * subset * subset] + invH[4][3] * Jacobian[j + 3 * subset * subset] + invH[4][4] * Jacobian[j + 4 * subset * subset] + invH[4][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 5 * subset * subset] = invH[5][0] * Jacobian[j] + invH[5][1] * Jacobian[j + subset * subset] + invH[5][2] * Jacobian[j + 2 * subset * subset] + invH[5][3] * Jacobian[j + 3 * subset * subset] + invH[5][4] * Jacobian[j + 4 * subset * subset] + invH[5][5] * Jacobian[j + 5 * subset * subset];
-        // cout << "j:          " << j << "           " << invHJacob[j] << "          " << invHJacob[j + subset * subset] << "           " << invHJacob[j + 2 * subset * subset] << "           " << invHJacob[j + 3 * subset * subset] << "           " << invHJacob[j + 4 * subset * subset] << "           " << invHJacob[j + 5 * subset * subset] << endl;
+        if (bDebug && j == subset * subset - 1)
+        {
+            std::cout << "Jacobian:" << Jacobian[j] << Jacobian[j + subset * subset] << Jacobian[j + 2 * subset * subset]
+                      << Jacobian[j + 3 * subset * subset] << Jacobian[j + 4 * subset * subset] << Jacobian[j + 5 * subset * subset]<<std::endl;
+            std::cout << "j:          " << j << "           " << invHJacob[j] << "          " << invHJacob[j + subset * subset] << "           " << invHJacob[j + 2 * subset * subset] << "           " << invHJacob[j + 3 * subset * subset] << "           " << invHJacob[j + 4 * subset * subset] << "           " << invHJacob[j + 5 * subset * subset] << std::endl;
+        }
         ////////////////////////////////////////////////////////////////////////////////////////
         deltafVec[j] = float(fSubset[j] - meanfSubset);
         // cout << "j:         " << j << "          " << deltafVec[j] << endl;
         sumRef2 += deltafVec[j] * deltafVec[j];
     }
+
+    
     double deltaf = sqrt(sumRef2);
 
     double warP[3][3] = {{1 + p[1], p[2], p[0]}, {p[4], 1 + p[5], p[3]}, {0, 0, 1}};

@@ -25,7 +25,7 @@ private:
 
     int IterICGN2(unsigned char *ImRef, unsigned char *ImDef, float *gradxImgRef, float *gradyImgRef, int *localSubHom,
                   float *localSub, float *p, int *pCoord, double *dispBias, int maxIter, int subset, int halfSubset,
-                  int sideW, int length);
+                  int sideW, int length, bool bDebug);
     int GetMatrixInverse(double src[3][3], int n, double des[3][3]);
     double getA(double arcs[3][3], int n);
     int  getAStart6(double arcs[6][6], int n, double ans[6][6]);
