@@ -201,7 +201,7 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
         if(irow != 12 || icol != 332){
             continue;
         }
-        printf("irow: %d, icol: %d,disp[i]: %d\n", irow, icol, disp[i]);
+        printf("irow: %d, icol: %d,disp[%d]: %d\n", irow, icol,i, disp[i]);
         bool bRet = false;
         bRet = disp[i] > 0;
         // bRet &= (irow - halfWinSize > 0);
@@ -226,14 +226,14 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
                     ImDef[num] = srcR[i + j * width + k - disp[i]];
                     gradxImgRef[num] = gradxImg[i + j * width + k];
                     gradyImgRef[num] = gradyImg[i + j * width + k];
-                    if(i == 16961){
-                        // printf("row: %d, col: %d, gradxImg[%d]: %lf, gradyImg[%d]: %lf, srcL[%d]: %d, srcR[%d]: %d\n",
-                        // irow + j,icol + k,
-                        // i + j * width + k, gradxImg[i + j * width + k],
-                        // i + j * width + k, gradyImg[i + j * width + k],
-                        // i + j * width + k, srcL[i + j * width + k],
-                        // i + j * width + k - disp[i], srcR[i + j * width + k - disp[i]]);
-                    }
+                    // if(irow == 12 && icol == 332){
+                    //     printf("j: %d,k: %d,row: %d, col: %d, gradxImg[%d]: %lf, gradyImg[%d]: %lf, srcL[%d]: %d, srcR[%d]: %d\n",
+                    //     j,k,irow + j,icol + k,
+                    //     i + j * width + k, gradxImg[i + j * width + k],
+                    //     i + j * width + k, gradyImg[i + j * width + k],
+                    //     i + j * width + k, srcL[i + j * width + k],
+                    //     i + j * width + k - disp[i], srcR[i + j * width + k - disp[i]]);
+                    // }
                     num++;
                 }
             }
@@ -412,7 +412,17 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
             Jacobian[n + 3 * subset * subset] = nablafy[n];
             Jacobian[n + 4 * subset * subset] = nablafy[n] * localSub[n];
             Jacobian[n + 5 * subset * subset] = nablafy[n] * localSub[n + subset * subset];
-            // cout << "n:          " << Jacobian[n] << "          " << Jacobian[n + subset * subset] << "           " << Jacobian[n + 2 * subset * subset] << "           " << Jacobian[n + 3 * subset * subset]  <<"           " << Jacobian[n + 4* subset * subset] << "           " << Jacobian[n + 5 * subset * subset] <<   endl;
+            // if (bDebug && j == -7 && k == 5){
+            //     std::cout << "n:          " << n << "       " <<
+            //     "j:" << j << "         " << "k:" << k << "        " <<
+            //     Jacobian[n] << "          " << 
+            //     Jacobian[n + subset * subset] << "           " << 
+            //     Jacobian[n + 2 * subset * subset] << "           " << 
+            //     Jacobian[n + 3 * subset * subset]  <<"           " << 
+            //     Jacobian[n + 4* subset * subset] << "           " << 
+            //     Jacobian[n + 5 * subset * subset] <<std::endl;
+            // }
+            
             H[0][0] += Jacobian[n] * Jacobian[n];
             H[0][1] += Jacobian[n] * Jacobian[n + subset * subset];
             H[0][2] += Jacobian[n] * Jacobian[n + 2 * subset * subset];
@@ -455,15 +465,15 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
 
     double invH[6][6] = {0};
     GetMatrixInverse6(H, 6, invH);
-    if (bDebug)
-    {
-        std::cout << invH[0][0] << "    " << invH[0][1] << "    " << invH[0][2] << "    " << invH[0][3] << "    " << invH[0][4] << "    " << invH[0][5] << std::endl;
-        std::cout << invH[1][0] << "    " << invH[1][1] << "    " << invH[1][2] << "    " << invH[1][3] << "    " << invH[1][4] << "    " << invH[1][5] << std::endl;
-        std::cout << invH[2][0] << "    " << invH[2][1] << "    " << invH[2][2] << "    " << invH[2][3] << "    " << invH[2][4] << "    " << invH[2][5] << std::endl;
-        std::cout << invH[3][0] << "    " << invH[3][1] << "    " << invH[3][2] << "    " << invH[3][3] << "    " << invH[3][4] << "    " << invH[3][5] << std::endl;
-        std::cout << invH[4][0] << "    " << invH[4][1] << "    " << invH[4][2] << "    " << invH[4][3] << "    " << invH[4][4] << "    " << invH[4][5] << std::endl;
-        std::cout << invH[5][0] << "    " << invH[5][1] << "    " << invH[5][2] << "    " << invH[5][3] << "    " << invH[5][4] << "    " << invH[5][5] << std::endl;
-    }
+    // if (bDebug)
+    // {
+    //     std::cout << invH[0][0] << "    " << invH[0][1] << "    " << invH[0][2] << "    " << invH[0][3] << "    " << invH[0][4] << "    " << invH[0][5] << std::endl;
+    //     std::cout << invH[1][0] << "    " << invH[1][1] << "    " << invH[1][2] << "    " << invH[1][3] << "    " << invH[1][4] << "    " << invH[1][5] << std::endl;
+    //     std::cout << invH[2][0] << "    " << invH[2][1] << "    " << invH[2][2] << "    " << invH[2][3] << "    " << invH[2][4] << "    " << invH[2][5] << std::endl;
+    //     std::cout << invH[3][0] << "    " << invH[3][1] << "    " << invH[3][2] << "    " << invH[3][3] << "    " << invH[3][4] << "    " << invH[3][5] << std::endl;
+    //     std::cout << invH[4][0] << "    " << invH[4][1] << "    " << invH[4][2] << "    " << invH[4][3] << "    " << invH[4][4] << "    " << invH[4][5] << std::endl;
+    //     std::cout << invH[5][0] << "    " << invH[5][1] << "    " << invH[5][2] << "    " << invH[5][3] << "    " << invH[5][4] << "    " << invH[5][5] << std::endl;
+    // }
 
     double *invHJacob = new double[6 * subset * subset];
     float *deltafVec = new float[subset * subset];
@@ -477,15 +487,19 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
         invHJacob[j + 3 * subset * subset] = invH[3][0] * Jacobian[j] + invH[3][1] * Jacobian[j + subset * subset] + invH[3][2] * Jacobian[j + 2 * subset * subset] + invH[3][3] * Jacobian[j + 3 * subset * subset] + invH[3][4] * Jacobian[j + 4 * subset * subset] + invH[3][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 4 * subset * subset] = invH[4][0] * Jacobian[j] + invH[4][1] * Jacobian[j + subset * subset] + invH[4][2] * Jacobian[j + 2 * subset * subset] + invH[4][3] * Jacobian[j + 3 * subset * subset] + invH[4][4] * Jacobian[j + 4 * subset * subset] + invH[4][5] * Jacobian[j + 5 * subset * subset];
         invHJacob[j + 5 * subset * subset] = invH[5][0] * Jacobian[j] + invH[5][1] * Jacobian[j + subset * subset] + invH[5][2] * Jacobian[j + 2 * subset * subset] + invH[5][3] * Jacobian[j + 3 * subset * subset] + invH[5][4] * Jacobian[j + 4 * subset * subset] + invH[5][5] * Jacobian[j + 5 * subset * subset];
-        if (bDebug && j == subset * subset - 1)
-        {
-            std::cout << "Jacobian:" << Jacobian[j] << Jacobian[j + subset * subset] << Jacobian[j + 2 * subset * subset]
-                      << Jacobian[j + 3 * subset * subset] << Jacobian[j + 4 * subset * subset] << Jacobian[j + 5 * subset * subset]<<std::endl;
-            std::cout << "j:          " << j << "           " << invHJacob[j] << "          " << invHJacob[j + subset * subset] << "           " << invHJacob[j + 2 * subset * subset] << "           " << invHJacob[j + 3 * subset * subset] << "           " << invHJacob[j + 4 * subset * subset] << "           " << invHJacob[j + 5 * subset * subset] << std::endl;
-        }
+        // if (bDebug && j == 12)
+        // {
+        //     std::cout << "Jacobian[j]:" << Jacobian[j] << " " << Jacobian[j + subset * subset]
+        //                 << " " << Jacobian[j + 2 * subset * subset] << " " << Jacobian[j + 3 * subset * subset]
+        //                 << " " << Jacobian[j + 4 * subset * subset] << " " << Jacobian[j + 5 * subset * subset] << std::endl;
+        //     std::cout << "j:          " << j << "           " << invHJacob[j] << "          " << invHJacob[j + subset * subset] << "           " << invHJacob[j + 2 * subset * subset] << "           " << invHJacob[j + 3 * subset * subset] << "           " << invHJacob[j + 4 * subset * subset] << "           " << invHJacob[j + 5 * subset * subset] << std::endl;
+        // }
         ////////////////////////////////////////////////////////////////////////////////////////
         deltafVec[j] = float(fSubset[j] - meanfSubset);
-        // cout << "j:         " << j << "          " << deltafVec[j] << endl;
+        if (bDebug){
+            //std::cout << "j:         " << j << "          " << deltafVec[j] << "  fSubset[j]:" << fSubset[j] << "  meanfSubset: " << meanfSubset << std::endl;
+        }
+        
         sumRef2 += deltafVec[j] * deltafVec[j];
     }
 
@@ -509,10 +523,22 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
             gIntep[j]                       = warP[0][0] * localSubHom[j] + warP[0][1] * localSubHom[j + subset * subset] + warP[0][2] * localSubHom[j + 2 * subset * subset];
             gIntep[j + subset * subset]     = warP[1][0] * localSubHom[j] + warP[1][1] * localSubHom[j + subset * subset] + warP[1][2] * localSubHom[j + 2 * subset * subset];
             gIntep[j + 2 * subset * subset] = warP[2][0] * localSubHom[j] + warP[2][1] * localSubHom[j + subset * subset] + warP[2][2] * localSubHom[j + 2 * subset * subset];
-            // cout << gIntep[j] << "              " << gIntep[j + subset * subset] << "             " << gIntep[j + 2 * subset * subset] << endl;
+            if (bDebug && j == 12){
+                std::cout << gIntep[j] << "              " << 
+                gIntep[j + subset * subset] << "             " << 
+                gIntep[j + 2 * subset * subset] << "     "<<
+                localSubHom[j]<< "     "<<
+                localSubHom[j + subset * subset]<< "     "<<
+                localSubHom[j + 2 * subset * subset]<<std::endl;
+            }
             PcoordInt[j]                       = pCoord[0] + gIntep[j];
             PcoordInt[j + subset * subset]     = pCoord[1] + gIntep[j + subset * subset];
             PcoordInt[j + 2 * subset * subset] = pCoord[2] + gIntep[j + 2 * subset * subset] - 1;
+            if (bDebug && j == 12){
+                std::cout << PcoordInt[j] << "              " << 
+                PcoordInt[j + subset * subset] << "             " << 
+                PcoordInt[j + 2 * subset * subset] << "     "<<std::endl;
+            }
             if (PcoordInt[j] < minPcoordInt1)
             {
                 minPcoordInt1 = PcoordInt[j];
@@ -548,8 +574,10 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 xInt[j] = floor(PcoordInt[j]);
                 xInt[j + subset * subset] = floor(PcoordInt[j + subset * subset]);
                 xInt[j + 2 * subset * subset] = floor(PcoordInt[j + 2 * subset * subset]);
-
-                // cout << "j:          " << j << "          " << xInt[j] << "          " << xInt[j + subset * subset] << "          " << xInt[j + 2 * subset * subset] << endl;
+                if (bDebug && j == 12){
+                    std::cout << "j:          " << j << "          " << xInt[j] << "          " << xInt[j + subset * subset] << "          " << xInt[j + 2 * subset * subset] << std::endl;
+                }
+                
                 deltaX[j] = PcoordInt[j] - xInt[j];
                 deltaX[j + subset * subset] = PcoordInt[j + subset * subset] - xInt[j + subset * subset];
                 deltaX[j + 2 * subset * subset] = PcoordInt[j + 2 * subset * subset] - xInt[j + 2 * subset * subset];
@@ -559,13 +587,18 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 deltaMatX[j + 2 * subset * subset] = MBT[2][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[2][1] * deltaX[j] * deltaX[j] + MBT[2][2] * deltaX[j] + MBT[2][3];
                 deltaMatX[j + 3 * subset * subset] = MBT[3][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[3][1] * deltaX[j] * deltaX[j] + MBT[3][2] * deltaX[j] + MBT[3][3];
 
-                // cout << "j:          " << j << "          " << deltaMatX[j] << "              " << deltaMatX[j + subset * subset] << "             " << deltaMatX[j + 2 * subset * subset] << "              " << deltaMatX[j + 3 * subset * subset] << "             " << endl;
-
+                if (bDebug && j == 12)
+                {
+                    std::cout << "deltaMatX:  j:          " << j << "          " << deltaMatX[j] << "              " << deltaMatX[j + subset * subset] << "             " << deltaMatX[j + 2 * subset * subset] << "              " << deltaMatX[j + 3 * subset * subset] << "             " << std::endl;
+                }
                 deltaMatY[j]                       = MBT[0][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[0][2] * deltaX[j + subset * subset] + MBT[0][3];
                 deltaMatY[j + subset * subset]     = MBT[1][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[1][2] * deltaX[j + subset * subset] + MBT[1][3];
                 deltaMatY[j + 2 * subset * subset] = MBT[2][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[2][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[2][2] * deltaX[j + subset * subset] + MBT[2][3];
                 deltaMatY[j + 3 * subset * subset] = MBT[3][0] * deltaX[j + subset * subset] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[3][1] * deltaX[j + subset * subset] * deltaX[j + subset * subset] + MBT[3][2] * deltaX[j + subset * subset] + MBT[3][3];
-                // cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << endl;
+                if (bDebug && j == 12){
+                    std::cout << "deltaMatY:  j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
+                }
+                
                 Indx[0] = (xInt[j + subset * subset] - 1) * length + xInt[j];//y-1,x
                 Indx[1] = (xInt[j + subset * subset]) * length + xInt[j];//y,x
                 Indx[2] = (xInt[j + subset * subset] + 1) * length + xInt[j];//y+1,x
@@ -582,12 +615,17 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 Indx[13] = (xInt[j + subset * subset]) * length + xInt[j] + 3;//y,x+3
                 Indx[14] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 3;//y+1,x+3
                 Indx[15] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 3;//y+2,x+3
-                // for (int ic = 0; ic < 16; ic++)
-                //{
-                //	cout << "j:          " << j << "          " << "ic:          " << ic << "          " << Indx[ic] << endl;
-                // }
-                // cout << " ***********************************************************" << endl;
-                // cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << endl;
+                if (bDebug && j == 12)
+                {
+                    for (int ic = 0; ic < 16; ic++)
+                    {
+                        std::cout << "Indx:  j:          " << j << "          " << "ic:          " << ic << "          " << 
+                        Indx[ic] << "  "<<xInt[j + subset * subset] - 1<<"  "<<xInt[j]<<std::endl;
+                    }
+                    std::cout << " ***********************************************************" << std::endl;
+                    //std::cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
+                }
+
                 D_all[0]  = ImDef[(Indx[0] % length - 1) * length + Indx[0] / length];
                 D_all[1]  = ImDef[(Indx[1] % length - 1) * length + Indx[1] / length];
                 D_all[2]  = ImDef[(Indx[2] % length - 1) * length + Indx[2] / length];
@@ -605,6 +643,17 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 D_all[14] = ImDef[(Indx[14] % length - 1) * length + Indx[14] / length];
                 D_all[15] = ImDef[(Indx[15] % length - 1) * length + Indx[15] / length];
 
+                if (bDebug && j == 12)
+                {
+                    for (int ic = 0; ic < 16; ic++)
+                    {
+                        std::cout << "D_all:  j:          " << j << "          " << "ic:          " << ic << "          " << 
+                        D_all[ic] << "  " << "  " << (Indx[0] % length - 1) << "  " << Indx[0] / length<< "  " <<(Indx[0] % length - 1) * length + Indx[0] / length <<std::endl;
+                    }
+                    std::cout << " ***********************************************************" << std::endl;
+                    //std::cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
+                }
+
                 defIntp[0]  = deltaMatY[j]                        * D_all[0]  * deltaMatX[j];
                 defIntp[1]  = deltaMatY[j + subset * subset]      * D_all[1]  * deltaMatX[j];
                 defIntp[2]  = deltaMatY[j + 2 * subset * subset]  * D_all[2]  * deltaMatX[j];
@@ -621,13 +670,20 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 defIntp[13] = deltaMatY[j + subset * subset]      * D_all[13] * deltaMatX[j + 3 * subset * subset];
                 defIntp[14] = deltaMatY[j + 2 * subset * subset]  * D_all[14] * deltaMatX[j + 3 * subset * subset];
                 defIntp[15] = deltaMatY[j + 3 * subset * subset]  * D_all[15] * deltaMatX[j + 3 * subset * subset];
-                // for (int ic = 0; ic < 16; ic++)
-                //{
-                //	cout << "j:          " << j << "          " << "ic:          " << ic << "          " << defIntp[ic] << endl;
-                // }
-                // cout << " ***********************************************************" << endl;
+                
+
                 defIntp2[j] = defIntp[0] + defIntp[1] + defIntp[2] + defIntp[3] + defIntp[4] + defIntp[5] + defIntp[6] + defIntp[7] + defIntp[8] + defIntp[9] + defIntp[10] + defIntp[11] + defIntp[12] + defIntp[13] + defIntp[14] + defIntp[15];
                 sumdefIntp += defIntp2[j];
+
+                if (bDebug && j == 12)
+                {
+                    for (int ic = 0; ic < 16; ic++)
+                    {
+                        std::cout << "j:          " << j << "          " << "ic:          " << ic << "          " << defIntp[ic] << " "<<
+                        defIntp2[j] << std::endl;
+                    }
+                    std::cout << " ***********************************************************" << std::endl;
+                }
             }
 
             float meandefIntp = sumdefIntp / float(subset * subset);
@@ -639,12 +695,18 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                 deltagVec[j] = defIntp2[j] - meandefIntp;
                 sumdeltagVec += (deltagVec[j] * deltagVec[j]);
             }
+
             double deltag = sqrt(sumdeltagVec);
+
             double *delta = new double[subset * subset];
             double deltap[6] = {0};
             for (int j = 0; j < subset * subset; j++)
             {
                 delta[j] = deltafVec[j] - deltaf / deltag * deltagVec[j];
+                if (bDebug && j == 12 && Iter == 0){
+                    printf("j: %d, ref_delta_mean_value: %lf,sigma_image_value_ref: %lf,target_delta_squar: %lf,target_delta_mean_value: %lf\n",
+                            j, deltafVec[j], deltaf,deltag,  deltagVec[j]);
+                }
                 deltap[0] += -invHJacob[j] * delta[j];
                 deltap[1] += -invHJacob[j + subset * subset] * delta[j];
                 deltap[2] += -invHJacob[j + 2 * subset * subset] * delta[j];

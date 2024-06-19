@@ -28,6 +28,19 @@ void calImage(int width, int height, cv::Mat &_mat) {
     }
 }
 
+void modifyImage(cv::Mat &_srcImage, cv::Mat &_resultImage){
+    for (int i = 0; i < _srcImage.rows; i++)
+    {
+        for (int j = 0; j < _srcImage.cols; j++)
+        {
+            _resultImage.at<cv::Vec3f>(i,j)[0] = *_srcImage.ptr<uchar>(i,j);
+            _resultImage.at<cv::Vec3f>(i,j)[1] = i;
+            _resultImage.at<cv::Vec3f>(i,j)[2] = j;
+        }
+        
+    }
+    
+}
 int main(int argc, char **argv) {
     if (argc < 4) {
         std::cerr << "Usage: " << argv[0] << " left_image_path right_image_path disparity_image_path" << std::endl;
@@ -39,10 +52,14 @@ int main(int argc, char **argv) {
 
     cv::Mat l_image = cv::imread(l_fileName, 0);
     cv::Mat r_image = cv::imread(r_fileName, 0);
-
+    cv::Mat l_image_result = cv::Mat(l_image.rows, l_image.cols, CV_32FC3);
+    cv::Mat r_imagre_result = cv::Mat(l_image.rows, l_image.cols, CV_32FC3);
+    modifyImage(l_image, l_image_result);
+    modifyImage(r_image, r_imagre_result);
+    cv::imwrite("l_image_result.jpg", l_image_result);
+    cv::imwrite("r_imagre_result.jpg", r_imagre_result);
+    
     cv::Mat disp = cv::imread(disp_fileName, 0);
-    cv::Mat float_disp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
-    disp.copyTo(float_disp);
 
     /*int width = 32;
     int height = 32;
@@ -56,7 +73,7 @@ int main(int argc, char **argv) {
     int maxIter = 15;
     cv::Mat optDisp = cv::Mat(disp.rows, disp.cols, CV_32FC1);
     CDispOptimizeICGN_GPU disp_optimize;
-    disp_optimize.run(l_image, r_image, float_disp, subset, sideW, maxIter, optDisp);
+    disp_optimize.run(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
     CDispOptimizeICGN_CPU disp_optimize_cpu;
     disp_optimize_cpu.run_old(l_image, r_image, disp, subset, sideW, maxIter, optDisp);
 

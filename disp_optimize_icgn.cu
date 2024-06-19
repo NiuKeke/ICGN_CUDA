@@ -649,7 +649,7 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
             _origin_src_image[(g_y + thread_y + i * 2) * width + g_x + thread_x];
     }
     __syncthreads();
-
+    
     const int lane_id = thread_index % 8;
 
     float sum = 0.0f;
@@ -661,8 +661,8 @@ __global__ void calMeanAndSigma(int subset, int sideW, int width, int height, uc
         {
             if (lane_id == 0)
             {
-                buffer = _src_image_sm[(halfSubset + threadIdx.y + j) * 32 +
-                                       halfSubset + k + threadIdx.x];
+                buffer = _src_image_sm[(halfWinSize + threadIdx.y + j) * 32 +
+                                       halfWinSize + k + threadIdx.x];
             }
             buffer = __shfl_sync(0xFFFFFFFFU, buffer, 0, 8);
             if (k >= -7 && k <= 7)
@@ -1045,7 +1045,7 @@ __global__ void calTargetMeanImageAndSigma(int subset, int sideW, int width, int
 __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterNum, int width, int height,
                                              float *_init_p, uchar *_origin_image_ref, uchar *_origin_image_target,
                                              float *_x_grad_image, float *_y_grad_image, float *_mean_image, float *_sigma_image_gpu,
-                                             float *_hessian_inv_image, float *_origin_disp,
+                                             float *_hessian_inv_image, uchar *_origin_disp,
                                              float *_opt_disp)
 {
     int thread_index = threadIdx.y * blockDim.x + threadIdx.x;
@@ -1084,13 +1084,17 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                             {_init_p[4], 1 + _init_p[5], _init_p[3]},
                             {0, 0, 1}};
         float _target_value_intp = 0;
+        
         if (thread_x <= subset && thread_y <= subset)
         {
             int iRow = i / BLOCK_THREAD_DIM_X + g_y + halfWinSize;
             int iCol = i % BLOCK_THREAD_DIM_X + g_x + halfWinSize;
-            if(i == 0 && thread_x == 0 && thread_y == 0 && block_index == 0){
-                printf("i: %d, iRow: %d, iCol: %d\n",i, iRow, iCol);
-            }
+            int disp_value = _origin_disp[iRow * width + iCol];
+            int r_iCol = iCol - disp_value;
+            // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 ){
+            //      printf("i: %d, iRow: %d, iCol: %d,disp_value: %d,r_iCol: %d,_origin_disp[%d]: %d\n",
+            //      i, iRow, iCol,disp_value,r_iCol,iRow * width + iCol,_origin_disp[iRow * width + iCol]);
+            // }
             float thre = 1;
             int Iter = 0;
             float Czncc = 0;
@@ -1102,55 +1106,110 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                 int x_int = 0;
                 int y_int = 0;
                 int z_int = 0;
-                int coor_x = thread_x - halfSubset;
-                int coor_y = thread_y - halfSubset;
-                float x = warP[0][0] * coor_x + warP[0][1] * coor_y + warP[0][2] * 1;
-                float y = warP[1][0] * coor_x + warP[1][1] * coor_y + warP[1][2] * 1;
+                int coor_x = thread_y - halfSubset;
+                int coor_y = thread_x - halfSubset;
+                float x = warP[0][0] * coor_x + warP[0][1] * coor_y + warP[0][2] * 1 + halfWinSize;
+                float y = warP[1][0] * coor_x + warP[1][1] * coor_y + warP[1][2] * 1 + halfWinSize;
                 float z = warP[2][0] * coor_x + warP[2][1] * coor_y + warP[2][2] * 1;
 
                 x_int = floor(x);
                 y_int = floor(y);
                 z_int = floor(z);
-                // if(threadIdx.y == 0 && threadIdx.x == 0){
-                //     printf("iRow: %d,iCol: %d,i:%d, x: %lf, y: %lf, z: %lf, coor_x: %d, coor_y: %d, x_int: %d, y_int: %d,z_int: %d\n",
-                //             iRow, iCol, i,x, y, z, coor_x, coor_y, x_int, y_int, z_int);
-                //     // printf("warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf, warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf,warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf\n",
-                //     //         warP[0][0], warP[0][1], warP[0][2],
-                //     //         warP[1][0], warP[1][1], warP[1][2],
-                //     //         warP[2][0], warP[2][1], warP[2][2]);
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 && Iter == 0){
+                //     printf("coor_x: %d, coor_y: %d, x_int: %d, y_int: %d, z_int: %d,x: %lf,y: %lf,z: %lf\n",coor_x,coor_y, x_int, y_int, z_int,x,y,z);
+
+                // }
+                //  if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 && Iter == 0){
+                //     // printf("iRow: %d,iCol: %d,i:%d, x: %lf, y: %lf, z: %lf, coor_x: %d, coor_y: %d, x_int: %d, y_int: %d,z_int: %d\n",
+                //     //         iRow, iCol, i,x, y, z, coor_x, coor_y, x_int, y_int, z_int);
+                //     printf("warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf, warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf,warP[0][0]: %lf,warP[0][1]: %lf, warP[0][2]: %lf\n",
+                //             warP[0][0], warP[0][1], warP[0][2],
+                //             warP[1][0], warP[1][1], warP[1][2],
+                //             warP[2][0], warP[2][1], warP[2][2]);
                 // }
                 float delta_x = x - x_int;
                 float delta_y = y - y_int;
                 float delta_z = z - z_int;
 
-                weight_x[0] = MBT[0][0] * x * x * x + MBT[0][1] * x * x + MBT[0][2] * x + MBT[0][3];
-                weight_x[1] = MBT[1][0] * x * x * x + MBT[1][1] * x * x + MBT[1][2] * x + MBT[1][3];
-                weight_x[2] = MBT[2][0] * x * x * x + MBT[2][1] * x * x + MBT[2][2] * x + MBT[2][3];
-                weight_x[3] = MBT[3][0] * x * x * x + MBT[3][1] * x * x + MBT[3][2] * x + MBT[3][3];
+                weight_x[0] = MBT[0][0] * delta_x * delta_x * delta_x + MBT[0][1] * delta_x * delta_x + MBT[0][2] * delta_x + MBT[0][3];
+                weight_x[1] = MBT[1][0] * delta_x * delta_x * delta_x + MBT[1][1] * delta_x * delta_x + MBT[1][2] * delta_x + MBT[1][3];
+                weight_x[2] = MBT[2][0] * delta_x * delta_x * delta_x + MBT[2][1] * delta_x * delta_x + MBT[2][2] * delta_x + MBT[2][3];
+                weight_x[3] = MBT[3][0] * delta_x * delta_x * delta_x + MBT[3][1] * delta_x * delta_x + MBT[3][2] * delta_x + MBT[3][3];
 
-                weight_y[0] = MBT[0][0] * y * y * y + MBT[0][1] * y * y + MBT[0][2] * y + MBT[0][3];
-                weight_y[1] = MBT[1][0] * y * y * y + MBT[1][1] * y * y + MBT[1][2] * y + MBT[1][3];
-                weight_y[2] = MBT[2][0] * y * y * y + MBT[2][1] * y * y + MBT[2][2] * y + MBT[2][3];
-                weight_y[3] = MBT[3][0] * y * y * y + MBT[3][1] * y * y + MBT[3][2] * y + MBT[3][3];
+                weight_y[0] = MBT[0][0] * delta_y * delta_y * delta_y + MBT[0][1] * delta_y * delta_y + MBT[0][2] * delta_y + MBT[0][3];
+                weight_y[1] = MBT[1][0] * delta_y * delta_y * delta_y + MBT[1][1] * delta_y * delta_y + MBT[1][2] * delta_y + MBT[1][3];
+                weight_y[2] = MBT[2][0] * delta_y * delta_y * delta_y + MBT[2][1] * delta_y * delta_y + MBT[2][2] * delta_y + MBT[2][3];
+                weight_y[3] = MBT[3][0] * delta_y * delta_y * delta_y + MBT[3][1] * delta_y * delta_y + MBT[3][2] * delta_y + MBT[3][3];
 
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 && Iter == 0){
+                //     printf("weight_x[0]: %lf, weight_x[1]: %lf, weight_x[2]: %lf, weight_x[3]: %lf\n", 
+                //     weight_x[0], weight_x[1], weight_x[2], weight_x[3]);
+                //     printf("weight_y[0]: %lf, weight_y[1]: %lf, weight_y[2]: %lf, weight_y[3]: %lf\n", 
+                //     weight_y[0], weight_y[1], weight_y[2], weight_y[3]);
+                // }
                 float target_value_intp[4][4] = {0};
-                target_value_intp[0][0] = _origin_image_target[(iRow + y_int - 1) * width + x_int + iCol];
-                target_value_intp[1][0] = _origin_image_target[(iRow + y_int) * width + x_int + iCol];
-                target_value_intp[2][0] = _origin_image_target[(iRow + y_int + 1) * width + x_int + iCol];
-                target_value_intp[3][0] = _origin_image_target[(iRow + y_int + 2) * width + x_int + iCol];
-                target_value_intp[0][1] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 1 + iCol];
-                target_value_intp[1][1] = _origin_image_target[(iRow + y_int) * width + x_int + 1 + iCol];
-                target_value_intp[2][1] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 1 + iCol];
-                target_value_intp[3][1] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 1 + iCol];
-                target_value_intp[0][2] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 2 + iCol];
-                target_value_intp[1][2] = _origin_image_target[(iRow + y_int) * width + x_int + 2 + iCol];
-                target_value_intp[2][2] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 2 + iCol];
-                target_value_intp[3][2] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 2 + iCol];
-                target_value_intp[0][3] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 3 + iCol];
-                target_value_intp[1][3] = _origin_image_target[(iRow + y_int) * width + x_int + 3 + iCol];
-                target_value_intp[2][3] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 3 + iCol];
-                target_value_intp[3][3] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 3 + iCol];
+                target_value_intp[0][0] = _origin_image_target[(iRow + y_int - 1) * width + x_int     + r_iCol];
+                target_value_intp[1][0] = _origin_image_target[(iRow + y_int)     * width + x_int     + r_iCol];
+                target_value_intp[2][0] = _origin_image_target[(iRow + y_int + 1) * width + x_int     + r_iCol];
+                target_value_intp[3][0] = _origin_image_target[(iRow + y_int + 2) * width + x_int     + r_iCol];
+                target_value_intp[0][1] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 1 + r_iCol];
+                target_value_intp[1][1] = _origin_image_target[(iRow + y_int)     * width + x_int + 1 + r_iCol];
+                target_value_intp[2][1] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 1 + r_iCol];
+                target_value_intp[3][1] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 1 + r_iCol];
+                target_value_intp[0][2] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 2 + r_iCol];
+                target_value_intp[1][2] = _origin_image_target[(iRow + y_int)     * width + x_int + 2 + r_iCol];
+                target_value_intp[2][2] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 2 + r_iCol];
+                target_value_intp[3][2] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 2 + r_iCol];
+                target_value_intp[0][3] = _origin_image_target[(iRow + y_int - 1) * width + x_int + 3 + r_iCol];
+                target_value_intp[1][3] = _origin_image_target[(iRow + y_int)     * width + x_int + 3 + r_iCol];
+                target_value_intp[2][3] = _origin_image_target[(iRow + y_int + 1) * width + x_int + 3 + r_iCol];
+                target_value_intp[3][3] = _origin_image_target[(iRow + y_int + 2) * width + x_int + 3 + r_iCol];
 
+                if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 && Iter == 0){
+
+                    int index[16] = {0};
+                    // index[0]  = (iRow + y_int - 1) * width + x_int + iCol;
+                    // index[1]  = (iRow + y_int) * width + x_int + iCol;
+                    // index[2]  = (iRow + y_int + 1) * width + x_int + iCol;
+                    // index[3]  = (iRow + y_int + 2) * width + x_int + iCol;
+                    // index[4]  = (iRow + y_int - 1) * width + x_int + 1 + iCol;
+                    // index[5]  = (iRow + y_int) * width + x_int + 1 + iCol;
+                    // index[6]  = (iRow + y_int + 1) * width + x_int + 1 + iCol;
+                    // index[7]  = (iRow + y_int + 2) * width + x_int + 1 + iCol;
+                    // index[8]  = (iRow + y_int - 1) * width + x_int + 2 + iCol;
+                    // index[9]  = (iRow + y_int) * width + x_int + 2 + iCol;
+                    // index[10] = (iRow + y_int + 1) * width + x_int + 2 + iCol;
+                    // index[11] = (iRow + y_int + 2) * width + x_int + 2 + iCol;
+                    // index[12] = (iRow + y_int - 1) * width + x_int + 3 + iCol;
+                    // index[13] = (iRow + y_int) * width + x_int + 3 + iCol;
+                    // index[14] = (iRow + y_int + 1) * width + x_int + 3 + iCol;
+                    // index[15] = (iRow + y_int + 2) * width + x_int + 3 + iCol;
+
+                    index[0]  = (y_int - 1) * 25 + x_int;
+                    index[1]  = (y_int) * 25 + x_int;
+                    index[2]  = (y_int + 1) * 25 + x_int;
+                    index[3]  = (y_int + 2) * 25 + x_int;
+                    index[4]  = (y_int - 1) * 25 + x_int + 1;
+                    index[5]  = (y_int) * 25 + x_int + 1;
+                    index[6]  = (y_int + 1) * 25 + x_int + 1;
+                    index[7]  = (y_int + 2) * 25 + x_int + 1;
+                    index[8]  = (y_int - 1) * 25 + x_int + 2;
+                    index[9]  = (y_int) * 25 + x_int + 2 ;
+                    index[10] = (y_int + 1) * 25 + x_int + 2 ;
+                    index[11] = (y_int + 2) * 25 + x_int + 2 ;
+                    index[12] = (y_int - 1) * 25 + x_int + 3 ;
+                    index[13] = (y_int) * 25 + x_int + 3 ;
+                    index[14] = (y_int + 1) * 25 + x_int + 3 ;
+                    index[15] = (y_int + 2) * 25 + x_int + 3 ;
+                    for (int m = 0; m < 4; m++)
+                    {
+                        for (int n = 0; n < 4; n++)
+                        {
+                            printf("index[%d]: %d,row: %d,col: %d\n", m * 4 + n,index[m * 4 + n],(iRow + y_int - 1),x_int + r_iCol);
+                            printf("target_value_intp[%d][%d]: %lf\n", m, n,target_value_intp[m][n]);
+                        }
+                    }
+                }
                 // int tmp_index = (iRow + y_int + 2) * width + x_int + 3 + iCol;
                 // if((iRow + y_int + 2) > height || (x_int + 3 + iCol) > width){
                 //     printf("i: %d, iRow: %d, iCol: %d, g_y: %d,g_x: %d\n",i, (iRow + y_int + 2), (x_int + 3 + iCol),g_y, g_x);
@@ -1176,6 +1235,10 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                 _target_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp;
                 _target_sigma_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp * _target_value_intp;
                 _target_delta_mean_value_intp_sm[thread_y * 16 + thread_x] = _target_value_intp;
+
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40&& Iter == 0){
+                //     printf("_target_value_intp: %lf\n", _target_value_intp);
+                // }
                 __syncthreads();
 
                 for (int r = 16 / 2; r > 0; r >>= 1)
@@ -1212,6 +1275,15 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                 float Jacobian[6] = {0};
                 Jacobian[0] = _x_grad_image[index];
                 Jacobian[3] = _y_grad_image[index];
+                // if(i == 0 && block_index == 40){
+                //      printf("i: %d, iRow: %d, iCol: %d,_origin_image_ref[%d]: %d,_mean_image[%d]: %lf\n", 
+                //     i, iRow, iCol, index, _origin_image_ref[index],sub_region_index,_mean_image[sub_region_index]);
+                // }
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40)
+                // {
+                //     printf("i: %d, iRow: %d, iCol: %d,index: %d,_x_grad_image[index]: %lf,_origin_image_ref[index]: %d,_mean_image[%d]: %lf\n", 
+                //     i, iRow, iCol, index,_x_grad_image[index],_origin_image_ref[index],sub_region_index,_mean_image[sub_region_index]);
+                // }
                 float coord_weight[2] = {0};
                 coord_weight[0] = float(thread_y - halfSubset) / float(halfSubset + 1);
                 coord_weight[1] = float(thread_x - halfSubset) / float(halfSubset + 1);
@@ -1228,8 +1300,8 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                     {
                         int g_index_sm = jRow * 6 + jCol;
                         int tmp_index = g_index_sm * BLOCK_THREAD_DIM_X * BLOCK_THREAD_DIM_Y + i;
-                        invHJacobian[jCol] += _hessian_inv_image_sm[tmp_index] * Jacobian[jCol];
-                        // if (i == 0 && thread_x == 0 && thread_y == 0 && block_index == 40)
+                        invHJacobian[jRow] += _hessian_inv_image_sm[tmp_index] * Jacobian[jCol];
+                        // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40)
                         // {
                         //     printf("i: %d, iRow: %d, iCol: %d,_hessian_inv_image_sm[%d]: %lf\n",
                         //             i, iRow, iCol,tmp_index, _hessian_inv_image_sm[tmp_index]);
@@ -1237,14 +1309,14 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                     }
                 }
 
-                if (i == 0 && thread_x == 0 && thread_y == 14 && block_index == 40)
-                {
-                    for (int m = 0; m < 6; m++)
-                    {
-                        printf("i: %d, iRow: %d, iCol: %d, invHJacobian[%d]: %lf,Jacobian[%d]: %lf\n",
-                           i, iRow, iCol,  m,invHJacobian[m], m, Jacobian[m]);
-                    }
-                }
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40)
+                // {
+                //     for (int m = 0; m < 6; m++)
+                //     {
+                //         printf("i: %d, iRow: %d, iCol: %d, invHJacobian[%d]: %lf,Jacobian[%d]: %lf\n",
+                //            i, iRow, iCol,  m,invHJacobian[m], m, Jacobian[m]);
+                //     }
+                // }
                 __syncthreads();
                 deltap_sm[thread_index + 0 * 16 * 16] = 0.0f;
                 deltap_sm[thread_index + 1 * 16 * 16] = 0.0f;
@@ -1260,6 +1332,10 @@ __global__ void calOptDisp_singleThreadBlock(int subset, int sideW, int maxIterN
                 {
                     tmp = ref_delta_mean_value - sigma_image_value_ref / target_delta_squar * target_delta_mean_value;
                 }
+                // if (i == 0 && thread_x == 0 && thread_y == 12 && block_index == 40 && Iter == 0){
+                //     printf("i: %d, iRow: %d, iCol: %d, ref_delta_mean_value: %lf,sigma_image_value_ref: %lf,target_delta_squar: %lf,target_delta_mean_value: %lf\n",
+                //             i, iRow, iCol,  ref_delta_mean_value, sigma_image_value_ref,target_delta_squar,  target_delta_mean_value);
+                // }
                 float deltap[6] = {0};
                 deltap[0] = -invHJacobian[0] * tmp;
                 deltap[1] = -invHJacobian[1] * tmp;
@@ -1766,7 +1842,7 @@ void CDispOptimizeICGN_GPU::run(cv::Mat &_l_image, cv::Mat &_r_image, cv::Mat &_
     }
     calOptDisp(subset, sideW, maxIter, _l_image.cols, _r_image.rows, _l_image.data, _r_image.data, 
                 _x_gradient_image, _y_gradient_image, _mean_image_gpu,_sigma_image_gpu, hessian_inv, 
-                (float *)_src_disp.data, (float *)_result.data);
+                (uchar *)_src_disp.data, (float *)_result.data);
 
     {
         cv::imwrite("./disp_result.tif", _result);
@@ -1887,21 +1963,21 @@ void CDispOptimizeICGN_GPU::generate_gradient_image(cv::Mat &_l_image, cv::Mat &
 void CDispOptimizeICGN_GPU::calOptDisp(int subset, int sideW, int maxIter, int width, int height,
                                        uchar *_origin_image_ref, uchar *_origin_image_target, float *_x_gradient_image,
                                        float *_y_gradient_image, float *_mean_image, float *_sigma_image_gpu,float *_hessian_inv_image,
-                                       float *_origin_disp_image, float *_opt_disp_image)
+                                       uchar *_origin_disp_image, float *_opt_disp_image)
 {
-    float *_origin_disp_image_gpu = nullptr;
+    uchar *_origin_disp_image_gpu = nullptr;
     float *_opt_disp_image_gpu = nullptr;
     uchar *_origin_image_ref_gpu = nullptr;
     uchar *_origin_image_target_gpu = nullptr;
     float p[6] = {0.4686, 0, 0, -0.2116, 0, 0};
     float *_init_p_gpu = nullptr;
-    cudaMalloc((void **)&_origin_disp_image_gpu, width * height * sizeof(float));
+    cudaMalloc((void **)&_origin_disp_image_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_opt_disp_image_gpu, width * height * sizeof(float));
     cudaMalloc((void **)&_origin_image_ref_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_origin_image_target_gpu, width * height * sizeof(uchar));
     cudaMalloc((void **)&_init_p_gpu, 6 * sizeof(float));
 
-    cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(float),
+    cudaMemcpy(_origin_disp_image_gpu, _origin_disp_image, width * height * sizeof(uchar),
                cudaMemcpyHostToDevice);
 
     cudaMemcpy(_origin_image_ref_gpu, _origin_image_ref, width * height * sizeof(uchar),
