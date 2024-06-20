@@ -226,14 +226,14 @@ int CDispOptimizeICGN_CPU::ICGNalgo(unsigned char *srcL, unsigned char *srcR, fl
                     ImDef[num] = srcR[i + j * width + k - disp[i]];
                     gradxImgRef[num] = gradxImg[i + j * width + k];
                     gradyImgRef[num] = gradyImg[i + j * width + k];
-                    // if(irow == 12 && icol == 332){
-                    //     printf("j: %d,k: %d,row: %d, col: %d, gradxImg[%d]: %lf, gradyImg[%d]: %lf, srcL[%d]: %d, srcR[%d]: %d\n",
-                    //     j,k,irow + j,icol + k,
-                    //     i + j * width + k, gradxImg[i + j * width + k],
-                    //     i + j * width + k, gradyImg[i + j * width + k],
-                    //     i + j * width + k, srcL[i + j * width + k],
-                    //     i + j * width + k - disp[i], srcR[i + j * width + k - disp[i]]);
-                    // }
+                    if(irow == 12 && icol == 332 && j == -12){
+                        printf("j: %d,k: %d,row: %d, col: %d, gradxImg[%d]: %lf, gradyImg[%d]: %lf, srcL[%d]: %d, srcR[%d]: %d,disp[%d]: %d\n",
+                        j,k,irow + j,icol + k - disp[i],
+                        i + j * width + k, gradxImg[i + j * width + k],
+                        i + j * width + k, gradyImg[i + j * width + k],
+                        i + j * width + k, srcL[i + j * width + k],
+                        i + j * width + k - disp[i], srcR[i + j * width + k - disp[i]],i,disp[i]);
+                    }
                     num++;
                 }
             }
@@ -523,19 +523,20 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
             gIntep[j]                       = warP[0][0] * localSubHom[j] + warP[0][1] * localSubHom[j + subset * subset] + warP[0][2] * localSubHom[j + 2 * subset * subset];
             gIntep[j + subset * subset]     = warP[1][0] * localSubHom[j] + warP[1][1] * localSubHom[j + subset * subset] + warP[1][2] * localSubHom[j + 2 * subset * subset];
             gIntep[j + 2 * subset * subset] = warP[2][0] * localSubHom[j] + warP[2][1] * localSubHom[j + subset * subset] + warP[2][2] * localSubHom[j + 2 * subset * subset];
-            if (bDebug && j == 12){
-                std::cout << gIntep[j] << "              " << 
-                gIntep[j + subset * subset] << "             " << 
-                gIntep[j + 2 * subset * subset] << "     "<<
-                localSubHom[j]<< "     "<<
-                localSubHom[j + subset * subset]<< "     "<<
-                localSubHom[j + 2 * subset * subset]<<std::endl;
-            }
+            // if (bDebug && j < 15){
+            //     std::cout << "j: "<<j<<"  "<<gIntep[j] << "              " << 
+            //     gIntep[j + subset * subset] << "             " << 
+            //     gIntep[j + 2 * subset * subset] << "     "<<
+            //     localSubHom[j]<< "     "<<
+            //     localSubHom[j + subset * subset]<< "     "<<
+            //     localSubHom[j + 2 * subset * subset]<<std::endl;
+            // }
             PcoordInt[j]                       = pCoord[0] + gIntep[j];
             PcoordInt[j + subset * subset]     = pCoord[1] + gIntep[j + subset * subset];
             PcoordInt[j + 2 * subset * subset] = pCoord[2] + gIntep[j + 2 * subset * subset] - 1;
-            if (bDebug && j == 12){
-                std::cout << PcoordInt[j] << "              " << 
+            if (bDebug && j < 15){
+                std::cout << "j:  "<<j<<"  "<<
+                PcoordInt[j] << "              " << 
                 PcoordInt[j + subset * subset] << "             " << 
                 PcoordInt[j + 2 * subset * subset] << "     "<<std::endl;
             }
@@ -578,8 +579,8 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                     std::cout << "j:          " << j << "          " << xInt[j] << "          " << xInt[j + subset * subset] << "          " << xInt[j + 2 * subset * subset] << std::endl;
                 }
                 
-                deltaX[j] = PcoordInt[j] - xInt[j];
-                deltaX[j + subset * subset] = PcoordInt[j + subset * subset] - xInt[j + subset * subset];
+                deltaX[j]                       = PcoordInt[j] - xInt[j];
+                deltaX[j + subset * subset]     = PcoordInt[j + subset * subset] - xInt[j + subset * subset];
                 deltaX[j + 2 * subset * subset] = PcoordInt[j + 2 * subset * subset] - xInt[j + 2 * subset * subset];
 
                 deltaMatX[j]                       = MBT[0][0] * deltaX[j] * deltaX[j] * deltaX[j] + MBT[0][1] * deltaX[j] * deltaX[j] + MBT[0][2] * deltaX[j] + MBT[0][3];
@@ -599,16 +600,16 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                     std::cout << "deltaMatY:  j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
                 }
                 
-                Indx[0] = (xInt[j + subset * subset] - 1) * length + xInt[j];//y-1,x
-                Indx[1] = (xInt[j + subset * subset]) * length + xInt[j];//y,x
-                Indx[2] = (xInt[j + subset * subset] + 1) * length + xInt[j];//y+1,x
-                Indx[3] = (xInt[j + subset * subset] + 2) * length + xInt[j];//y+2,x
-                Indx[4] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 1;//y-1,x+1
-                Indx[5] = (xInt[j + subset * subset]) * length + xInt[j] + 1;//y,x+1
-                Indx[6] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 1;//y+1,x+1
-                Indx[7] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 1;//y+2,x+1
-                Indx[8] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 2;//y-1,x+2
-                Indx[9] = (xInt[j + subset * subset]) * length + xInt[j] + 2;//y,x+2
+                Indx[0]  = (xInt[j + subset * subset] - 1) * length + xInt[j];//y-1,x
+                Indx[1]  = (xInt[j + subset * subset]) * length + xInt[j];//y,x
+                Indx[2]  = (xInt[j + subset * subset] + 1) * length + xInt[j];//y+1,x
+                Indx[3]  = (xInt[j + subset * subset] + 2) * length + xInt[j];//y+2,x
+                Indx[4]  = (xInt[j + subset * subset] - 1) * length + xInt[j] + 1;//y-1,x+1
+                Indx[5]  = (xInt[j + subset * subset]) * length + xInt[j] + 1;//y,x+1
+                Indx[6]  = (xInt[j + subset * subset] + 1) * length + xInt[j] + 1;//y+1,x+1
+                Indx[7]  = (xInt[j + subset * subset] + 2) * length + xInt[j] + 1;//y+2,x+1
+                Indx[8]  = (xInt[j + subset * subset] - 1) * length + xInt[j] + 2;//y-1,x+2
+                Indx[9]  = (xInt[j + subset * subset]) * length + xInt[j] + 2;//y,x+2
                 Indx[10] = (xInt[j + subset * subset] + 1) * length + xInt[j] + 2;//y+1,x+2
                 Indx[11] = (xInt[j + subset * subset] + 2) * length + xInt[j] + 2;//y+2,x+2
                 Indx[12] = (xInt[j + subset * subset] - 1) * length + xInt[j] + 3;//y-1,x+3
@@ -626,16 +627,16 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
                     //std::cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
                 }
 
-                D_all[0]  = ImDef[(Indx[0] % length - 1) * length + Indx[0] / length];
-                D_all[1]  = ImDef[(Indx[1] % length - 1) * length + Indx[1] / length];
-                D_all[2]  = ImDef[(Indx[2] % length - 1) * length + Indx[2] / length];
-                D_all[3]  = ImDef[(Indx[3] % length - 1) * length + Indx[3] / length];
-                D_all[4]  = ImDef[(Indx[4] % length - 1) * length + Indx[4] / length];
-                D_all[5]  = ImDef[(Indx[5] % length - 1) * length + Indx[5] / length];
-                D_all[6]  = ImDef[(Indx[6] % length - 1) * length + Indx[6] / length];
-                D_all[7]  = ImDef[(Indx[7] % length - 1) * length + Indx[7] / length];
-                D_all[8]  = ImDef[(Indx[8] % length - 1) * length + Indx[8] / length];
-                D_all[9]  = ImDef[(Indx[9] % length - 1) * length + Indx[9] / length];
+                D_all[0]  = ImDef[(Indx[0] % length - 1)  * length + Indx[0]  / length];
+                D_all[1]  = ImDef[(Indx[1] % length - 1)  * length + Indx[1]  / length];
+                D_all[2]  = ImDef[(Indx[2] % length - 1)  * length + Indx[2]  / length];
+                D_all[3]  = ImDef[(Indx[3] % length - 1)  * length + Indx[3]  / length];
+                D_all[4]  = ImDef[(Indx[4] % length - 1)  * length + Indx[4]  / length];
+                D_all[5]  = ImDef[(Indx[5] % length - 1)  * length + Indx[5]  / length];
+                D_all[6]  = ImDef[(Indx[6] % length - 1)  * length + Indx[6]  / length];
+                D_all[7]  = ImDef[(Indx[7] % length - 1)  * length + Indx[7]  / length];
+                D_all[8]  = ImDef[(Indx[8] % length - 1)  * length + Indx[8]  / length];
+                D_all[9]  = ImDef[(Indx[9] % length - 1)  * length + Indx[9]  / length];
                 D_all[10] = ImDef[(Indx[10] % length - 1) * length + Indx[10] / length];
                 D_all[11] = ImDef[(Indx[11] % length - 1) * length + Indx[11] / length];
                 D_all[12] = ImDef[(Indx[12] % length - 1) * length + Indx[12] / length];
@@ -645,10 +646,26 @@ int CDispOptimizeICGN_CPU::IterICGN2(unsigned char *ImRef, unsigned char *ImDef,
 
                 if (bDebug && j == 12)
                 {
+                    printf("row: %d,col: %d\n", (Indx[0]  % length - 1), Indx[0]  / length);
+                    printf("row: %d,col: %d\n", (Indx[1]  % length - 1), Indx[1]  / length);
+                    printf("row: %d,col: %d\n", (Indx[2]  % length - 1), Indx[2]  / length);
+                    printf("row: %d,col: %d\n", (Indx[3]  % length - 1), Indx[3]  / length);
+                    printf("row: %d,col: %d\n", (Indx[4]  % length - 1), Indx[4]  / length);
+                    printf("row: %d,col: %d\n", (Indx[5]  % length - 1), Indx[5]  / length);
+                    printf("row: %d,col: %d\n", (Indx[6]  % length - 1), Indx[6]  / length);
+                    printf("row: %d,col: %d\n", (Indx[7]  % length - 1), Indx[7]  / length);
+                    printf("row: %d,col: %d\n", (Indx[8]  % length - 1), Indx[8]  / length);
+                    printf("row: %d,col: %d\n", (Indx[9]  % length - 1), Indx[9]  / length);
+                    printf("row: %d,col: %d\n", (Indx[10] % length - 1), Indx[10] / length);
+                    printf("row: %d,col: %d\n", (Indx[11] % length - 1), Indx[11] / length);
+                    printf("row: %d,col: %d\n", (Indx[12] % length - 1), Indx[12] / length);
+                    printf("row: %d,col: %d\n", (Indx[13] % length - 1), Indx[13] / length);
+                    printf("row: %d,col: %d\n", (Indx[14] % length - 1), Indx[14] / length);
+                    printf("row: %d,col: %d\n", (Indx[15] % length - 1), Indx[15] / length);
                     for (int ic = 0; ic < 16; ic++)
                     {
                         std::cout << "D_all:  j:          " << j << "          " << "ic:          " << ic << "          " << 
-                        D_all[ic] << "  " << "  " << (Indx[0] % length - 1) << "  " << Indx[0] / length<< "  " <<(Indx[0] % length - 1) * length + Indx[0] / length <<std::endl;
+                        D_all[ic] << "  " << "  " << (Indx[0] % length - 1) + 12 << "  " << Indx[0] / length + 330<< "  " <<(Indx[0] % length - 1) * length + Indx[0] / length <<std::endl;
                     }
                     std::cout << " ***********************************************************" << std::endl;
                     //std::cout << "j:          " << j << "          " << deltaMatY[j] << "              " << deltaMatY[j + subset * subset] << "             " << deltaMatY[j + 2 * subset * subset] << "              " << deltaMatY[j + 3 * subset * subset] << "             " << std::endl;
