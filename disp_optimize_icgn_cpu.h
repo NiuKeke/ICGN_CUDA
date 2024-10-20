@@ -21,7 +21,7 @@ private:
 
     int ICGNalgo(unsigned char *srcL, unsigned char *srcR, float *gradxImg, float *gradyImg, int *localSubHom,
              float *localSub,
-                 uchar *disp, double *dispFloat, int height, int width, int subset, int sideW, int maxIter);
+                 uchar *disp, float *dispFloat, int height, int width, int subset, int sideW, int maxIter);
 
     int IterICGN2(unsigned char *ImRef, unsigned char *ImDef, float *gradxImgRef, float *gradyImgRef, int *localSubHom,
                   float *localSub, float *p, int *pCoord, double *dispBias, int maxIter, int subset, int halfSubset,

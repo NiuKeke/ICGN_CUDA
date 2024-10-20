@@ -1,19 +1,19 @@
-cmake_minimum_required(VERSION 3.16)
-project(disp_opt CXX CUDA)
+cmake_minimum_required(VERSION 3.20)
+project(disp_opt CUDA)
 
-set(CMAKE_CUDA_STANDARD 14)
-enable_language(CUDA)
+set(CMAKE_CUDA_STANDARD 11)
 #opencv
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
-message("OpenCV_INCLUDE_DIRS: " ${OpenCV_INCLUDE_DIRS})
-file(GLOB ${PROJECT_NAME}_SRC_LST 
-        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/*.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/*.cu
-        ${CMAKE_CURRENT_SOURCE_DIR}/*.cuh)
-add_executable(disp_opt ${${PROJECT_NAME}_SRC_LST})
+
+add_executable(${PROJECT_NAME}
+        disp_optimize_icgn.cu
+        disp_optimize_icgn.cuh
+        disp_optimize_icgn_cpu.cu
+        disp_optimize_icgn_cpu.h
+        main.cu)
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
 message("OpenCV_LIBS: " ${OpenCV_LIBS})
-set_target_properties(disp_opt PROPERTIES
+set_target_properties(${PROJECT_NAME} PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
+
